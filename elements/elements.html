@@ -12,6 +12,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
 
 
+
 </head><body><div hidden="" by-vulcanize=""><script>(function () {
 function resolve() {
 document.body.removeAttribute('unresolved');
@@ -12671,7 +12672,7 @@ this.fire('dom-change');
      * Selects the given value. If the `multi` property is true, then the selected state of the
      * `value` will be toggled; otherwise the `value` will be selected.
      *
-     * @param {string} value the value to select.
+     * @param {string|number} value the value to select.
      */
     select: function(value) {
       if (this._defaultFocusAsync) {
@@ -15118,6 +15119,3882 @@ context. You should place this element as a child of `<body>` whenever possible.
     });
   </script>
 </dom-module>
+<script>
+(function () {
+  var _bindingRegex_patch = {
+    // Issue with https://github.com/Polymer/polymer/issues/3349 
+    _bindingRegex_1_2_4: (function() {
+      var IDENT  = '(?:' + '[a-zA-Z_$][\\w.:$-*]*' + ')';
+      var NUMBER = '(?:' + '[-+]?[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?' + ')';
+      var SQUOTE_STRING = '(?:' + '\'(?:[^\'\\\\]|\\\\.)*\'' + ')';
+      var DQUOTE_STRING = '(?:' + '"(?:[^"\\\\]|\\\\.)*"' + ')';
+      var STRING = '(?:' + SQUOTE_STRING + '|' + DQUOTE_STRING + ')';
+      var ARGUMENT = '(?:' + IDENT + '|' + NUMBER + '|' +  STRING + '\\s*' + ')';
+      var ARGUMENTS = '(?:' + ARGUMENT + '(?:,\\s*' + ARGUMENT + ')*' + ')';
+      var ARGUMENT_LIST = '(?:' + '\\(\\s*' +
+                                    '(?:' + ARGUMENTS + '?' + ')' +
+                                  '\\)\\s*' + ')';
+      var BINDING = '(' + IDENT + '\\s*' + ARGUMENT_LIST + '?' + ')'; // Group 3
+      var OPEN_BRACKET = '(\\[\\[|{{)' + '\\s*';
+      var CLOSE_BRACKET = '(?:]]|}})';
+      var NEGATE = '(?:(!)\\s*)?'; // Group 2
+      var EXPRESSION = OPEN_BRACKET + NEGATE + BINDING + CLOSE_BRACKET;
+      return new RegExp(EXPRESSION, "g");
+    })(),
+
+    // Fix from https://github.com/TimvdLippe/polymer/blob/fix-binding-with-dash/src/lib/annotations/annotations.html
+    _bindingRegex_1_2_4_patched: (function() {
+      var IDENT  = '(?:' + '[a-zA-Z_\\$][\\w\\.:\\$\\-\\*]*' + ')';
+      var NUMBER = '(?:' + '[-+]?[0-9]*\\.?[0-9]+(?:[eE][-+]?[0-9]+)?' + ')';
+      var SQUOTE_STRING = '(?:' + '\'(?:[^\'\\\\]|\\\\.)*\'' + ')';
+      var DQUOTE_STRING = '(?:' + '"(?:[^"\\\\]|\\\\.)*"' + ')';
+      var STRING = '(?:' + SQUOTE_STRING + '|' + DQUOTE_STRING + ')';
+      var ARGUMENT = '(?:' + IDENT + '|' + NUMBER + '|' +  STRING + '\\s*' + ')';
+      var ARGUMENTS = '(?:' + ARGUMENT + '(?:,\\s*' + ARGUMENT + ')*' + ')';
+      var ARGUMENT_LIST = '(?:' + '\\(\\s*' +
+                                    '(?:' + ARGUMENTS + '?' + ')' +
+                                  '\\)\\s*' + ')';
+      var BINDING = '(' + IDENT + '\\s*' + ARGUMENT_LIST + '?' + ')'; // Group 3
+      var OPEN_BRACKET = '(\\[\\[|{{)' + '\\s*';
+      var CLOSE_BRACKET = '(?:]]|}})';
+      var NEGATE = '(?:(!)\\s*)?'; // Group 2
+      var EXPRESSION = OPEN_BRACKET + NEGATE + BINDING + CLOSE_BRACKET;
+      return new RegExp(EXPRESSION, "g");
+    })()
+  };
+    
+  if (Polymer.Annotations._bindingRegex.toString() === 
+      _bindingRegex_patch._bindingRegex_1_2_4.toString()) {
+    console.log('Fixing Polymer issue#3349 by patching Polymer.Annotations._bindingRegex for Polymer 1.2.4');
+    Polymer.Annotations._bindingRegex = _bindingRegex_patch._bindingRegex_1_2_4_patched;
+  }
+})();
+</script><script>function MakePromise (asap) {
+  function Promise(fn) {
+		if (typeof this !== 'object' || typeof fn !== 'function') throw new TypeError();
+		this._state = null;
+		this._value = null;
+		this._deferreds = []
+
+		doResolve(fn, resolve.bind(this), reject.bind(this));
+	}
+
+	function handle(deferred) {
+		var me = this;
+		if (this._state === null) {
+			this._deferreds.push(deferred);
+			return
+		}
+		asap(function() {
+			var cb = me._state ? deferred.onFulfilled : deferred.onRejected
+			if (typeof cb !== 'function') {
+				(me._state ? deferred.resolve : deferred.reject)(me._value);
+				return;
+			}
+			var ret;
+			try {
+				ret = cb(me._value);
+			}
+			catch (e) {
+				deferred.reject(e);
+				return;
+			}
+			deferred.resolve(ret);
+		})
+	}
+
+	function resolve(newValue) {
+		try { //Promise Resolution Procedure: https://github.com/promises-aplus/promises-spec#the-promise-resolution-procedure
+			if (newValue === this) throw new TypeError();
+			if (newValue && (typeof newValue === 'object' || typeof newValue === 'function')) {
+				var then = newValue.then;
+				if (typeof then === 'function') {
+					doResolve(then.bind(newValue), resolve.bind(this), reject.bind(this));
+					return;
+				}
+			}
+			this._state = true;
+			this._value = newValue;
+			finale.call(this);
+		} catch (e) { reject.call(this, e); }
+	}
+
+	function reject(newValue) {
+		this._state = false;
+		this._value = newValue;
+		finale.call(this);
+	}
+
+	function finale() {
+		for (var i = 0, len = this._deferreds.length; i < len; i++) {
+			handle.call(this, this._deferreds[i]);
+		}
+		this._deferreds = null;
+	}
+
+	/**
+	 * Take a potentially misbehaving resolver function and make sure
+	 * onFulfilled and onRejected are only called once.
+	 *
+	 * Makes no guarantees about asynchrony.
+	 */
+	function doResolve(fn, onFulfilled, onRejected) {
+		var done = false;
+		try {
+			fn(function (value) {
+				if (done) return;
+				done = true;
+				onFulfilled(value);
+			}, function (reason) {
+				if (done) return;
+				done = true;
+				onRejected(reason);
+			})
+		} catch (ex) {
+			if (done) return;
+			done = true;
+			onRejected(ex);
+		}
+	}
+
+	Promise.prototype['catch'] = function (onRejected) {
+		return this.then(null, onRejected);
+	};
+
+	Promise.prototype.then = function(onFulfilled, onRejected) {
+		var me = this;
+		return new Promise(function(resolve, reject) {
+      handle.call(me, {
+        onFulfilled: onFulfilled,
+        onRejected: onRejected,
+        resolve: resolve,
+        reject: reject
+      });
+		})
+	};
+
+	Promise.resolve = function (value) {
+		if (value && typeof value === 'object' && value.constructor === Promise) {
+			return value;
+		}
+
+		return new Promise(function (resolve) {
+			resolve(value);
+		});
+	};
+
+	Promise.reject = function (value) {
+		return new Promise(function (resolve, reject) {
+			reject(value);
+		});
+	};
+
+	
+  return Promise;
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = MakePromise;
+}
+
+</script>
+<script>
+if (!window.Promise) {
+  window.Promise = MakePromise(Polymer.Base.async);
+}
+</script>
+<script>
+  'use strict'
+
+  Polymer({
+    is: 'iron-request',
+
+    hostAttributes: {
+      hidden: true
+    },
+
+    properties: {
+
+      /**
+       * A reference to the XMLHttpRequest instance used to generate the
+       * network request.
+       *
+       * @type {XMLHttpRequest}
+       */
+      xhr: {
+        type: Object,
+        notify: true,
+        readOnly: true,
+        value: function() {
+          return new XMLHttpRequest();
+        }
+      },
+
+      /**
+       * A reference to the parsed response body, if the `xhr` has completely
+       * resolved.
+       *
+       * @type {*}
+       * @default null
+       */
+      response: {
+        type: Object,
+        notify: true,
+        readOnly: true,
+        value: function() {
+          return null;
+        }
+      },
+
+      /**
+       * A reference to the status code, if the `xhr` has completely resolved.
+       */
+      status: {
+        type: Number,
+        notify: true,
+        readOnly: true,
+        value: 0
+      },
+
+      /**
+       * A reference to the status text, if the `xhr` has completely resolved.
+       */
+      statusText: {
+        type: String,
+        notify: true,
+        readOnly: true,
+        value: ''
+      },
+
+      /**
+       * A promise that resolves when the `xhr` response comes back, or rejects
+       * if there is an error before the `xhr` completes.
+       *
+       * @type {Promise}
+       */
+      completes: {
+        type: Object,
+        readOnly: true,
+        notify: true,
+        value: function() {
+          return new Promise(function (resolve, reject) {
+            this.resolveCompletes = resolve;
+            this.rejectCompletes = reject;
+          }.bind(this));
+        }
+      },
+
+      /**
+       * An object that contains progress information emitted by the XHR if
+       * available.
+       *
+       * @default {}
+       */
+      progress: {
+        type: Object,
+        notify: true,
+        readOnly: true,
+        value: function() {
+          return {};
+        }
+      },
+
+      /**
+       * Aborted will be true if an abort of the request is attempted.
+       */
+      aborted: {
+        type: Boolean,
+        notify: true,
+        readOnly: true,
+        value: false,
+      },
+
+      /**
+       * Errored will be true if the browser fired an error event from the
+       * XHR object (mainly network errors).
+       */
+      errored: {
+        type: Boolean,
+        notify: true,
+        readOnly: true,
+        value: false
+      },
+
+      /**
+       * TimedOut will be true if the XHR threw a timeout event.
+       */
+      timedOut: {
+        type: Boolean,
+        notify: true,
+        readOnly: true,
+        value: false
+      }
+    },
+
+    /**
+     * Succeeded is true if the request succeeded. The request succeeded if it
+     * loaded without error, wasn't aborted, and the status code is ≥ 200, and
+     * < 300, or if the status code is 0.
+     *
+     * The status code 0 is accepted as a success because some schemes - e.g.
+     * file:// - don't provide status codes.
+     *
+     * @return {boolean}
+     */
+    get succeeded() {
+      if (this.errored || this.aborted || this.timedOut) {
+        return false;
+      }
+      var status = this.xhr.status || 0;
+
+      // Note: if we are using the file:// protocol, the status code will be 0
+      // for all outcomes (successful or otherwise).
+      return status === 0 ||
+        (status >= 200 && status < 300);
+    },
+
+    /**
+     * Sends an HTTP request to the server and returns the XHR object.
+     *
+     * @param {{
+     *   url: string,
+     *   method: (string|undefined),
+     *   async: (boolean|undefined),
+     *   body: (ArrayBuffer|ArrayBufferView|Blob|Document|FormData|null|string|undefined|Object),
+     *   headers: (Object|undefined),
+     *   handleAs: (string|undefined),
+     *   jsonPrefix: (string|undefined),
+     *   withCredentials: (boolean|undefined)}} options -
+     *     url The url to which the request is sent.
+     *     method The HTTP method to use, default is GET.
+     *     async By default, all requests are sent asynchronously. To send synchronous requests,
+     *         set to true.
+     *     body The content for the request body for POST method.
+     *     headers HTTP request headers.
+     *     handleAs The response type. Default is 'text'.
+     *     withCredentials Whether or not to send credentials on the request. Default is false.
+     *   timeout: (Number|undefined)
+     * @return {Promise}
+     */
+    send: function (options) {
+      var xhr = this.xhr;
+
+      if (xhr.readyState > 0) {
+        return null;
+      }
+
+      xhr.addEventListener('progress', function (progress) {
+        this._setProgress({
+          lengthComputable: progress.lengthComputable,
+          loaded: progress.loaded,
+          total: progress.total
+        });
+      }.bind(this))
+
+      xhr.addEventListener('error', function (error) {
+        this._setErrored(true);
+        this._updateStatus();
+        this.rejectCompletes(error);
+      }.bind(this));
+
+      xhr.addEventListener('timeout', function (error) {
+        this._setTimedOut(true);
+        this._updateStatus();
+        this.rejectCompletes(error);
+      }.bind(this));
+
+      xhr.addEventListener('abort', function () {
+        this._updateStatus();
+        this.rejectCompletes(new Error('Request aborted.'));
+      }.bind(this));
+
+
+      // Called after all of the above.
+      xhr.addEventListener('loadend', function () {
+        this._updateStatus();
+
+        if (!this.succeeded) {
+          this.rejectCompletes(new Error('The request failed with status code: ' + this.xhr.status));
+          return;
+        }
+
+        this._setResponse(this.parseResponse());
+        this.resolveCompletes(this);
+      }.bind(this));
+
+      this.url = options.url;
+      xhr.open(
+        options.method || 'GET',
+        options.url,
+        options.async !== false
+      );
+
+      var acceptType = {
+        'json': 'application/json',
+        'text': 'text/plain',
+        'html': 'text/html',
+        'xml': 'application/xml',
+        'arraybuffer': 'application/octet-stream'
+      }[options.handleAs];
+      var headers = options.headers || Object.create(null);
+      var newHeaders = Object.create(null);
+      for (var key in headers) {
+        newHeaders[key.toLowerCase()] = headers[key];
+      }
+      headers = newHeaders;
+
+      if (acceptType && !headers['accept']) {
+        headers['accept'] = acceptType;
+      }
+      Object.keys(headers).forEach(function (requestHeader) {
+        if (/[A-Z]/.test(requestHeader)) {
+          console.error('Headers must be lower case, got', requestHeader);
+        }
+        xhr.setRequestHeader(
+          requestHeader,
+          headers[requestHeader]
+        );
+      }, this);
+
+      if (options.async !== false) {
+        var handleAs = options.handleAs;
+
+        // If a JSON prefix is present, the responseType must be 'text' or the
+        // browser won’t be able to parse the response.
+        if (!!options.jsonPrefix || !handleAs) {
+          handleAs = 'text';
+        }
+
+        // In IE, `xhr.responseType` is an empty string when the response
+        // returns. Hence, caching it as `xhr._responseType`.
+        xhr.responseType = xhr._responseType = handleAs;
+
+        // Cache the JSON prefix, if it exists.
+        if (!!options.jsonPrefix) {
+          xhr._jsonPrefix = options.jsonPrefix;
+        }
+      }
+
+      xhr.withCredentials = !!options.withCredentials;
+      xhr.timeout = options.timeout;
+
+      var body = this._encodeBodyObject(options.body, headers['content-type']);
+
+      xhr.send(
+        /** @type {ArrayBuffer|ArrayBufferView|Blob|Document|FormData|
+                   null|string|undefined} */
+        (body));
+
+      return this.completes;
+    },
+
+    /**
+     * Attempts to parse the response body of the XHR. If parsing succeeds,
+     * the value returned will be deserialized based on the `responseType`
+     * set on the XHR.
+     *
+     * @return {*} The parsed response,
+     * or undefined if there was an empty response or parsing failed.
+     */
+    parseResponse: function () {
+      var xhr = this.xhr;
+      var responseType = xhr.responseType || xhr._responseType;
+      var preferResponseText = !this.xhr.responseType;
+      var prefixLen = (xhr._jsonPrefix && xhr._jsonPrefix.length) || 0;
+
+      try {
+        switch (responseType) {
+          case 'json':
+            // If the xhr object doesn't have a natural `xhr.responseType`,
+            // we can assume that the browser hasn't parsed the response for us,
+            // and so parsing is our responsibility. Likewise if response is
+            // undefined, as there's no way to encode undefined in JSON.
+            if (preferResponseText || xhr.response === undefined) {
+              // Try to emulate the JSON section of the response body section of
+              // the spec: https://xhr.spec.whatwg.org/#response-body
+              // That is to say, we try to parse as JSON, but if anything goes
+              // wrong return null.
+              try {
+                return JSON.parse(xhr.responseText);
+              } catch (_) {
+                return null;
+              }
+            }
+
+            return xhr.response;
+          case 'xml':
+            return xhr.responseXML;
+          case 'blob':
+          case 'document':
+          case 'arraybuffer':
+            return xhr.response;
+          case 'text':
+          default: {
+            // If `prefixLen` is set, it implies the response should be parsed
+            // as JSON once the prefix of length `prefixLen` is stripped from
+            // it. Emulate the behavior above where null is returned on failure
+            // to parse.
+            if (prefixLen) {
+              try {
+                return JSON.parse(xhr.responseText.substring(prefixLen));
+              } catch (_) {
+                return null;
+              }
+            }
+            return xhr.responseText;
+          }
+        }
+      } catch (e) {
+        this.rejectCompletes(new Error('Could not parse response. ' + e.message));
+      }
+    },
+
+    /**
+     * Aborts the request.
+     */
+    abort: function () {
+      this._setAborted(true);
+      this.xhr.abort();
+    },
+
+    /**
+     * @param {*} body The given body of the request to try and encode.
+     * @param {?string} contentType The given content type, to infer an encoding
+     *     from.
+     * @return {*} Either the encoded body as a string, if successful,
+     *     or the unaltered body object if no encoding could be inferred.
+     */
+    _encodeBodyObject: function(body, contentType) {
+      if (typeof body == 'string') {
+        return body;  // Already encoded.
+      }
+      var bodyObj = /** @type {Object} */ (body);
+      switch(contentType) {
+        case('application/json'):
+          return JSON.stringify(bodyObj);
+        case('application/x-www-form-urlencoded'):
+          return this._wwwFormUrlEncode(bodyObj);
+      }
+      return body;
+    },
+
+    /**
+     * @param {Object} object The object to encode as x-www-form-urlencoded.
+     * @return {string} .
+     */
+    _wwwFormUrlEncode: function(object) {
+      if (!object) {
+        return '';
+      }
+      var pieces = [];
+      Object.keys(object).forEach(function(key) {
+        // TODO(rictic): handle array values here, in a consistent way with
+        //   iron-ajax params.
+        pieces.push(
+            this._wwwFormUrlEncodePiece(key) + '=' +
+            this._wwwFormUrlEncodePiece(object[key]));
+      }, this);
+      return pieces.join('&');
+    },
+
+    /**
+     * @param {*} str A key or value to encode as x-www-form-urlencoded.
+     * @return {string} .
+     */
+    _wwwFormUrlEncodePiece: function(str) {
+      // Spec says to normalize newlines to \r\n and replace %20 spaces with +.
+      // jQuery does this as well, so this is likely to be widely compatible.
+      return encodeURIComponent(str.toString().replace(/\r?\n/g, '\r\n'))
+          .replace(/%20/g, '+');
+    },
+
+    /**
+     * Updates the status code and status text.
+     */
+    _updateStatus: function() {
+      this._setStatus(this.xhr.status);
+      this._setStatusText((this.xhr.statusText === undefined) ? '' : this.xhr.statusText);
+    }
+  });
+</script>
+
+
+<script>
+  'use strict';
+
+  Polymer({
+
+    is: 'iron-ajax',
+
+    /**
+     * Fired when a request is sent.
+     *
+     * @event request
+     */
+
+    /**
+     * Fired when a response is received.
+     *
+     * @event response
+     */
+
+    /**
+     * Fired when an error is received.
+     *
+     * @event error
+     */
+
+    hostAttributes: {
+      hidden: true
+    },
+
+    properties: {
+      /**
+       * The URL target of the request.
+       */
+      url: {
+        type: String
+      },
+
+      /**
+       * An object that contains query parameters to be appended to the
+       * specified `url` when generating a request. If you wish to set the body
+       * content when making a POST request, you should use the `body` property
+       * instead.
+       */
+      params: {
+        type: Object,
+        value: function() {
+          return {};
+        }
+      },
+
+      /**
+       * The HTTP method to use such as 'GET', 'POST', 'PUT', or 'DELETE'.
+       * Default is 'GET'.
+       */
+      method: {
+        type: String,
+        value: 'GET'
+      },
+
+      /**
+       * HTTP request headers to send.
+       *
+       * Example:
+       *
+       *     <iron-ajax
+       *         auto
+       *         url="http://somesite.com"
+       *         headers='{"X-Requested-With": "XMLHttpRequest"}'
+       *         handle-as="json"></iron-ajax>
+       *
+       * Note: setting a `Content-Type` header here will override the value
+       * specified by the `contentType` property of this element.
+       */
+      headers: {
+        type: Object,
+        value: function() {
+          return {};
+        }
+      },
+
+      /**
+       * Content type to use when sending data. If the `contentType` property
+       * is set and a `Content-Type` header is specified in the `headers`
+       * property, the `headers` property value will take precedence.
+       */
+      contentType: {
+        type: String,
+        value: null
+      },
+
+      /**
+       * Body content to send with the request, typically used with "POST"
+       * requests.
+       *
+       * If body is a string it will be sent unmodified.
+       *
+       * If Content-Type is set to a value listed below, then
+       * the body will be encoded accordingly.
+       *
+       *    * `content-type="application/json"`
+       *      * body is encoded like `{"foo":"bar baz","x":1}`
+       *    * `content-type="application/x-www-form-urlencoded"`
+       *      * body is encoded like `foo=bar+baz&x=1`
+       *
+       * Otherwise the body will be passed to the browser unmodified, and it
+       * will handle any encoding (e.g. for FormData, Blob, ArrayBuffer).
+       *
+       * @type (ArrayBuffer|ArrayBufferView|Blob|Document|FormData|null|string|undefined|Object)
+       */
+      body: {
+        type: Object,
+        value: null
+      },
+
+      /**
+       * Toggle whether XHR is synchronous or asynchronous. Don't change this
+       * to true unless You Know What You Are Doing™.
+       */
+      sync: {
+        type: Boolean,
+        value: false
+      },
+
+      /**
+       * Specifies what data to store in the `response` property, and
+       * to deliver as `event.detail.response` in `response` events.
+       *
+       * One of:
+       *
+       *    `text`: uses `XHR.responseText`.
+       *
+       *    `xml`: uses `XHR.responseXML`.
+       *
+       *    `json`: uses `XHR.responseText` parsed as JSON.
+       *
+       *    `arraybuffer`: uses `XHR.response`.
+       *
+       *    `blob`: uses `XHR.response`.
+       *
+       *    `document`: uses `XHR.response`.
+       */
+      handleAs: {
+        type: String,
+        value: 'json'
+      },
+
+      /**
+       * Set the withCredentials flag on the request.
+       */
+      withCredentials: {
+        type: Boolean,
+        value: false
+      },
+
+      /**
+       * Set the timeout flag on the request.
+       */
+      timeout: {
+        type: Number,
+        value: 0
+      },
+
+      /**
+       * If true, automatically performs an Ajax request when either `url` or
+       * `params` changes.
+       */
+      auto: {
+        type: Boolean,
+        value: false
+      },
+
+      /**
+       * If true, error messages will automatically be logged to the console.
+       */
+      verbose: {
+        type: Boolean,
+        value: false
+      },
+
+      /**
+       * The most recent request made by this iron-ajax element.
+       */
+      lastRequest: {
+        type: Object,
+        notify: true,
+        readOnly: true
+      },
+
+      /**
+       * True while lastRequest is in flight.
+       */
+      loading: {
+        type: Boolean,
+        notify: true,
+        readOnly: true
+      },
+
+      /**
+       * lastRequest's response.
+       *
+       * Note that lastResponse and lastError are set when lastRequest finishes,
+       * so if loading is true, then lastResponse and lastError will correspond
+       * to the result of the previous request.
+       *
+       * The type of the response is determined by the value of `handleAs` at
+       * the time that the request was generated.
+       *
+       * @type {Object}
+       */
+      lastResponse: {
+        type: Object,
+        notify: true,
+        readOnly: true
+      },
+
+      /**
+       * lastRequest's error, if any.
+       *
+       * @type {Object}
+       */
+      lastError: {
+        type: Object,
+        notify: true,
+        readOnly: true
+      },
+
+      /**
+       * An Array of all in-flight requests originating from this iron-ajax
+       * element.
+       */
+      activeRequests: {
+        type: Array,
+        notify: true,
+        readOnly: true,
+        value: function() {
+          return [];
+        }
+      },
+
+      /**
+       * Length of time in milliseconds to debounce multiple automatically generated requests.
+       */
+      debounceDuration: {
+        type: Number,
+        value: 0,
+        notify: true
+      },
+
+      /**
+       * Prefix to be stripped from a JSON response before parsing it.
+       *
+       * In order to prevent an attack using CSRF with Array responses
+       * (http://haacked.com/archive/2008/11/20/anatomy-of-a-subtle-json-vulnerability.aspx/)
+       * many backends will mitigate this by prefixing all JSON response bodies
+       * with a string that would be nonsensical to a JavaScript parser.
+       *
+       */
+      jsonPrefix: {
+        type: String,
+        value: ''
+      },
+
+      _boundHandleResponse: {
+        type: Function,
+        value: function() {
+          return this._handleResponse.bind(this);
+        }
+      }
+    },
+
+    observers: [
+      '_requestOptionsChanged(url, method, params.*, headers, contentType, ' +
+          'body, sync, handleAs, jsonPrefix, withCredentials, timeout, auto)'
+    ],
+
+    /**
+     * The query string that should be appended to the `url`, serialized from
+     * the current value of `params`.
+     *
+     * @return {string}
+     */
+    get queryString () {
+      var queryParts = [];
+      var param;
+      var value;
+
+      for (param in this.params) {
+        value = this.params[param];
+        param = window.encodeURIComponent(param);
+
+        if (Array.isArray(value)) {
+          for (var i = 0; i < value.length; i++) {
+            queryParts.push(param + '=' + window.encodeURIComponent(value[i]));
+          }
+        } else if (value !== null) {
+          queryParts.push(param + '=' + window.encodeURIComponent(value));
+        } else {
+          queryParts.push(param);
+        }
+      }
+
+      return queryParts.join('&');
+    },
+
+    /**
+     * The `url` with query string (if `params` are specified), suitable for
+     * providing to an `iron-request` instance.
+     *
+     * @return {string}
+     */
+    get requestUrl() {
+      var queryString = this.queryString;
+
+      if (queryString) {
+        var bindingChar = this.url.indexOf('?') >= 0 ? '&' : '?';
+        return this.url + bindingChar + queryString;
+      }
+
+      return this.url;
+    },
+
+    /**
+     * An object that maps header names to header values, first applying the
+     * the value of `Content-Type` and then overlaying the headers specified
+     * in the `headers` property.
+     *
+     * @return {Object}
+     */
+    get requestHeaders() {
+      var headers = {};
+      var contentType = this.contentType;
+      if (contentType == null && (typeof this.body === 'string')) {
+        contentType = 'application/x-www-form-urlencoded';
+      }
+      if (contentType) {
+        headers['content-type'] = contentType;
+      }
+      var header;
+
+      if (this.headers instanceof Object) {
+        for (header in this.headers) {
+          headers[header] = this.headers[header].toString();
+        }
+      }
+
+      return headers;
+    },
+
+    /**
+     * Request options suitable for generating an `iron-request` instance based
+     * on the current state of the `iron-ajax` instance's properties.
+     *
+     * @return {{
+     *   url: string,
+     *   method: (string|undefined),
+     *   async: (boolean|undefined),
+     *   body: (ArrayBuffer|ArrayBufferView|Blob|Document|FormData|null|string|undefined|Object),
+     *   headers: (Object|undefined),
+     *   handleAs: (string|undefined),
+     *   jsonPrefix: (string|undefined),
+     *   withCredentials: (boolean|undefined)}}
+     */
+    toRequestOptions: function() {
+      return {
+        url: this.requestUrl || '',
+        method: this.method,
+        headers: this.requestHeaders,
+        body: this.body,
+        async: !this.sync,
+        handleAs: this.handleAs,
+        jsonPrefix: this.jsonPrefix,
+        withCredentials: this.withCredentials,
+        timeout: this.timeout
+      };
+    },
+
+    /**
+     * Performs an AJAX request to the specified URL.
+     *
+     * @return {!IronRequestElement}
+     */
+    generateRequest: function() {
+      var request = /** @type {!IronRequestElement} */ (document.createElement('iron-request'));
+      var requestOptions = this.toRequestOptions();
+
+      this.activeRequests.push(request);
+
+      request.completes.then(
+        this._boundHandleResponse
+      ).catch(
+        this._handleError.bind(this, request)
+      ).then(
+        this._discardRequest.bind(this, request)
+      );
+
+      request.send(requestOptions);
+
+      this._setLastRequest(request);
+      this._setLoading(true);
+
+      this.fire('request', {
+        request: request,
+        options: requestOptions
+      }, {bubbles: false});
+
+      return request;
+    },
+
+    _handleResponse: function(request) {
+      if (request === this.lastRequest) {
+        this._setLastResponse(request.response);
+        this._setLastError(null);
+        this._setLoading(false);
+      }
+      this.fire('response', request, {bubbles: false});
+    },
+
+    _handleError: function(request, error) {
+      if (this.verbose) {
+        console.error(error);
+      }
+
+      if (request === this.lastRequest) {
+        this._setLastError({
+          request: request,
+          error: error
+        });
+        this._setLastResponse(null);
+        this._setLoading(false);
+      }
+      this.fire('error', {
+        request: request,
+        error: error
+      }, {bubbles: false});
+    },
+
+    _discardRequest: function(request) {
+      var requestIndex = this.activeRequests.indexOf(request);
+
+      if (requestIndex > -1) {
+        this.activeRequests.splice(requestIndex, 1);
+      }
+    },
+
+    _requestOptionsChanged: function() {
+      this.debounce('generate-request', function() {
+        if (this.url == null) {
+          return;
+        }
+
+        if (this.auto) {
+          this.generateRequest();
+        }
+      }, this.debounceDuration);
+    },
+
+  });
+</script>
+
+
+
+<dom-module id="iron-localstorage" assetpath="../bower_components/iron-localstorage/"></dom-module>
+<script>
+
+  Polymer({
+    is: 'iron-localstorage',
+
+    properties: {
+      /**
+       * localStorage item key
+       */
+      name: {
+        type: String,
+        value: ''
+      },
+      /**
+       * The data associated with this storage.
+       * If set to null item will be deleted.
+       * @type {*}
+       */
+      value: {
+        type: Object,
+        notify: true
+      },
+
+      /**
+       * If true: do not convert value to JSON on save/load
+       */
+      useRaw: {
+        type: Boolean,
+        value: false
+      },
+
+      /**
+       * Value will not be saved automatically if true. You'll have to do it manually with `save()`
+       */
+      autoSaveDisabled: {
+        type: Boolean,
+        value: false
+      },
+      /**
+       * Last error encountered while saving/loading items
+       */
+      errorMessage: {
+        type: String,
+        notify: true
+      },
+
+      /** True if value has been loaded */
+      _loaded: {
+        type: Boolean,
+        value: false
+      }
+    },
+
+    observers: [
+      '_debounceReload(name,useRaw)',
+      '_trySaveValue(autoSaveDisabled)',
+      '_trySaveValue(value.*)'
+    ],
+
+    ready: function() {
+      this._boundHandleStorage = this._handleStorage.bind(this);
+    },
+
+    attached: function() {
+      window.addEventListener('storage', this._boundHandleStorage);
+    },
+
+    detached: function() {
+      window.removeEventListener('storage', this._boundHandleStorage);
+    },
+
+    _handleStorage: function(ev) {
+      if (ev.key == this.name) {
+        this._load(true);
+      }
+    },
+
+    _trySaveValue: function() {
+      if (this._doNotSave) {
+        return;
+      }
+      if (this._loaded && !this.autoSaveDisabled) {
+        this.debounce('save', this.save);
+      }
+    },
+
+    _debounceReload: function() {
+      this.debounce('reload', this.reload);
+    },
+
+    /**
+     * Loads the value again. Use if you modify
+     * localStorage using DOM calls, and want to
+     * keep this element in sync.
+     */
+    reload: function() {
+      this._loaded = false;
+      this._load();
+    },
+
+    /**
+     * loads value from local storage
+     * @param {boolean=} externalChange true if loading changes from a different window
+     */
+    _load: function(externalChange) {
+      var v = window.localStorage.getItem(this.name);
+
+      if (v === null) {
+        this._loaded = true;
+        this._doNotSave = true;  // guard for save watchers
+        this.value = null;
+        this._doNotSave = false;
+        this.fire('iron-localstorage-load-empty', { externalChange: externalChange});
+      } else {
+        if (!this.useRaw) {
+          try { // parse value as JSON
+            v = JSON.parse(v);
+          } catch(x) {
+            this.errorMessage = "Could not parse local storage value";
+            console.error("could not parse local storage value", v);
+            v = null;
+          }
+        }
+        this._loaded = true;
+        this._doNotSave = true;
+        this.value = v;
+        this._doNotSave = false;
+        this.fire('iron-localstorage-load', { externalChange: externalChange});
+      }
+    },
+
+    /**
+     * Saves the value to localStorage. Call to save if autoSaveDisabled is set.
+     * If `value` is null or undefined, deletes localStorage.
+     */
+    save: function() {
+      var v = this.useRaw ? this.value : JSON.stringify(this.value);
+      try {
+        if (this.value === null || this.value === undefined) {
+          window.localStorage.removeItem(this.name);
+        } else {
+          window.localStorage.setItem(this.name, /** @type {string} */ (v));
+        }
+      }
+      catch(ex) {
+        // Happens in Safari incognito mode,
+        this.errorMessage = ex.message;
+        console.error("localStorage could not be saved. Safari incoginito mode?", ex);
+      }
+    }
+
+    /**
+     * Fired when value loads from localStorage.
+     *
+     * @event iron-localstorage-load
+     * @param {{externalChange:boolean}} detail -
+     *     externalChange: true if change occured in different window.
+     */
+
+    /**
+     * Fired when loaded value does not exist.
+     * Event handler can be used to initialize default value.
+     *
+     * @event iron-localstorage-load-empty
+     * @param {{externalChange:boolean}} detail -
+     *     externalChange: true if change occured in different window.
+     */
+  });
+
+</script>
+
+<dom-module id="i18n-number" assetpath="../bower_components/i18n-number/">
+  <template>
+    <span id="number"></span>
+  </template>
+  <script>
+  Polymer({
+    is: 'i18n-number',
+
+    /**
+     * Fired whenever the formatted text is rendered.
+     *
+     * @event rendered
+     */
+    
+    properties: {
+      /**
+       * The locale for the formatted number.
+       * The typical value is bound to `{{effectiveLang}}` when the containing element has
+       * `BehaviorsStore.I18nBehavior`.
+       */
+      lang: {
+        type: String,
+        value: 'en',
+        observer: '_langChanged',
+        reflectToAttribute: true
+      },
+
+      /**
+       * Options object for Intl.NumberFormat 
+       * (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/NumberFormat)
+       */
+      options: {
+        type: Object,
+        observer: '_optionsChanged',
+        notify: true
+      },
+
+      /**
+       * Raw string synchronized with textContent
+       */
+      raw: {
+        type: String,
+        observer: '_rawChanged'
+      },
+
+      /**
+       * Offset for number
+       *
+       * Note: number = rawNumber - offset 
+       */
+      offset: {
+        type: Number,
+        value: 0,
+        observer: '_offsetChanged'
+      },
+
+      /**
+       * Raw number parsed from raw
+       */
+      rawNumber: {
+        type: Number,
+        notify: true
+      },
+
+      /**
+       * Number calculated from rawNumber and offset
+       */
+      number: {
+        type: Number,
+        notify: true
+      },
+
+      /**
+       * Formatted string rendered for UI
+       */
+      formatted: {
+        type: String,
+        notify: true
+      }
+    },
+
+    observers: [
+      '_onOptionsPropertyChanged(options.*)'
+    ],
+
+    /**
+     * Default locale constant 'en'
+     */
+    DEFAULT_LANG: 'en',
+
+    ready: function () {
+      this._setupObservers();
+      this.raw = this.textNode.data;
+    },
+
+    attached: function () {
+      this.raw = this.textNode.data;
+    },
+
+    /**
+     * Set up observers of textContent mutations
+     */
+    _setupObservers: function () {
+      this.textNode = Polymer.dom(this).childNodes[0];
+      if (!this.textNode) {
+        Polymer.dom(this).appendChild(document.createTextNode(''));
+        this.textNode = Polymer.dom(this).childNodes[0];
+      }
+      this.observer = new MutationObserver(this._textMutated.bind(this));
+      this.observer.observe(this.textNode, { characterData: true });
+      this.nodeObserver = Polymer.dom(this).observeNodes(function (info) {
+        if (info.addedNodes[0] && 
+            info.addedNodes[0].nodeType === info.addedNodes[0].TEXT_NODE) {
+          this.textNode = info.addedNodes[0];
+          this.raw = this.textNode.data;
+          //console.log('i18n-number: text node added with ' + this.raw);
+          this.observer.observe(this.textNode, { characterData: true });
+        }
+      }.bind(this));
+    },
+
+    /**
+     * MutationObserver callback of the child text node to re-render on text mutations.
+     *
+     * @param {Array} mutations Array of MutationRecord (https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver).
+     */
+    _textMutated: function (mutations) {
+      mutations.forEach(function(mutation) {
+        switch (mutation.type) {
+        case 'characterData':
+          //console.log('i18n-number: _textMutated: raw = ' + mutation.target.data);
+          if (this.raw !== mutation.target.data) {
+            this.raw = mutation.target.data;
+          }
+          break;
+        default:
+          break;
+        }
+      }, this);
+    },
+
+    /**
+     * Observer of `raw` property to re-render the formatted number.
+     *
+     * @param {string} raw New raw number string.
+     */
+    _rawChanged: function (raw) {
+      if (this.textNode) {
+        if (raw !== this.textNode.data) {
+          this.textNode.data = raw;
+        }
+        //console.log('i18n-number: _rawChanged: raw = ' + raw);
+        this._render(this.lang, this.options, raw, this.offset);
+      }
+    },
+
+    /**
+     * Observer of `lang` property to re-render the formatted number.
+     *
+     * @param {string} lang New locale.
+     */
+    _langChanged: function (lang) {
+      if (!lang) {
+        this.lang = this.DEFAULT_LANG;
+        lang = this.lang;
+      }
+      if (this.textNode) {
+        //console.log('i18n-number: _langChanged: lang = ' + lang);
+        this._render(lang, this.options, this.raw, this.offset);
+      }
+    },
+
+    /**
+     * Observer of `options` property to re-render the formatted number.
+     *
+     * @param {Object} options New options for Intl.NumberFormat.
+     */
+    _optionsChanged: function (options) {
+      if (this.textNode) {
+        //console.log('i18n-number: _optionsChanged: options = ' + JSON.stringify(options));
+        this._render(this.lang, options, this.raw, this.offset);
+      }
+    },
+
+    /**
+     * Observer of `options` sub-properties to re-render the formatted number.
+     */
+    _onOptionsPropertyChanged: function (/* changeRecord */) {
+      if (this.textNode) {
+        //console.log('_onOptionsPropertyChanged: path = ' + changeRecord.path + ' value = ' + JSON.stringify(changeRecord.value));
+        this._render(this.lang, this.options, this.raw, this.offset);
+      }
+    },
+
+    /**
+     * Observer of `offset` property to re-render the formatted number.
+     *
+     * @param {number} offset New offset.
+     */
+    _offsetChanged: function (offset) {
+      if (this.textNode) {
+        //console.log('i18n-number: _offsetChanged: offset = ' + offset);
+        this._render(this.lang, this.options, this.raw, offset);
+      }
+    },
+
+    /**
+     * Formats the number
+     *
+     * @param {string} lang Locale for formatting.
+     * @param {Object} options Options for Intl.NumberFormat.
+     * @param {number} number Number to format.
+     * @return {string} Formatted number string.
+     */
+    _formatNumber: function (lang, options, number) {
+      if (!lang) {
+        lang = this.DEFAULT_LANG;
+      }
+      if (Intl && Intl.NumberFormat) {
+        try {
+          return new Intl.NumberFormat(lang, options).format(number);
+        }
+        catch (e) {
+          return number.toLocaleString();
+        }
+      }
+      else {
+        return number.toLocaleString(lang, options);
+      }
+    },
+
+    /**
+     * Renders the formatted number
+     *
+     * @param {string} lang Locale for formatting.
+     * @param {Object} options Options for Intl.NumberFormat.
+     * @param {string} raw Raw number string.
+     * @param {number} offset Offset for number.
+     */
+    _render: function (lang, options, raw, offset) {
+      // TODO: rendering may be done redundantly on property initializations
+      raw = raw.trim();
+      if (!raw && !this.formatted) {
+        //console.log('i18n-number: skipping _render as raw is null');
+        return;
+      }
+      if (raw) {
+        this.rawNumber = Number(raw);
+        this.number = this.rawNumber - offset;
+        this.formatted = this._formatNumber(lang, options, this.number);
+      }
+      else {
+        this.rawNumber = undefined;
+        this.number = undefined;
+        this.formatted = '';
+      }
+      this.$.number.textContent = this.formatted;
+      //console.log('i18n-number: _render ' + this.formatted);
+      this.fire('rendered');
+    },
+
+    /**
+     * Renders the formatted number with the current parameters
+     *
+     * Note: (As of Polymer 1.2.3)
+     *   Explicit render() call is needed whenever the observer 
+     *   `_onOptionsPropertyChanged(options.*)` is NOT invoked 
+     *   after a property of `options` is changed.  An explicit call 
+     *   `this.notifyPath('options', this.options, true)` can also 
+     *   trigger re-rendering.
+     *
+     *   If the changed property of `options` is bound in an annotation
+     *   like `{{options.currency}}`, the observer `_onOptionsPropertyChanged(options.*)`
+     *   is automatically called whenever the property value is changed
+     *   and thus no explicit call of `render()` or `notifyPath()` is
+     *   required.
+     */
+    render: function () {
+      this._render(this.lang, this.options, this.raw, this.offset);
+    }
+  });
+  </script>
+</dom-module><script>var _cp=[function(e,t){return"other"},function(e,t){return t?"other":1==e?"one":"other"},function(e,t){return t?"other":0==e||1==e?"one":"other"},function(e,t){var r=String(e).split("."),n=!r[1];return t?"other":1==e&&n?"one":"other"}];!function(e,t){"function"==typeof define&&define.amd?define(t):"object"==typeof exports?module.exports=t:e.plurals=t}(this,{af:_cp[1],ak:_cp[2],am:function(e,t){return t?"other":e>=0&&1>=e?"one":"other"},ar:function(e,t){var r=String(e).split("."),n=Number(r[0])==e,o=n&&r[0].slice(-2);return t?"other":0==e?"zero":1==e?"one":2==e?"two":o>=3&&10>=o?"few":o>=11&&99>=o?"many":"other"},as:function(e,t){return t?1==e||5==e||7==e||8==e||9==e||10==e?"one":2==e||3==e?"two":4==e?"few":6==e?"many":"other":e>=0&&1>=e?"one":"other"},asa:_cp[1],ast:_cp[3],az:function(e,t){var r=String(e).split("."),n=r[0],o=n.slice(-1),c=n.slice(-2),i=n.slice(-3);return t?1==o||2==o||5==o||7==o||8==o||20==c||50==c||70==c||80==c?"one":3==o||4==o||100==i||200==i||300==i||400==i||500==i||600==i||700==i||800==i||900==i?"few":0==n||6==o||40==c||60==c||90==c?"many":"other":1==e?"one":"other"},be:function(e,t){var r=String(e).split("."),n=Number(r[0])==e,o=n&&r[0].slice(-1),c=n&&r[0].slice(-2);return t?2!=o&&3!=o||12==c||13==c?"other":"few":1==o&&11!=c?"one":o>=2&&4>=o&&(12>c||c>14)?"few":n&&0==o||o>=5&&9>=o||c>=11&&14>=c?"many":"other"},bem:_cp[1],bez:_cp[1],bg:_cp[1],bh:_cp[2],bm:_cp[0],bn:function(e,t){return t?1==e||5==e||7==e||8==e||9==e||10==e?"one":2==e||3==e?"two":4==e?"few":6==e?"many":"other":e>=0&&1>=e?"one":"other"},bo:_cp[0],br:function(e,t){var r=String(e).split("."),n=Number(r[0])==e,o=n&&r[0].slice(-1),c=n&&r[0].slice(-2),i=n&&r[0].slice(-6);return t?"other":1==o&&11!=c&&71!=c&&91!=c?"one":2==o&&12!=c&&72!=c&&92!=c?"two":(3==o||4==o||9==o)&&(10>c||c>19)&&(70>c||c>79)&&(90>c||c>99)?"few":0!=e&&n&&0==i?"many":"other"},brx:_cp[1],bs:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=n.slice(-2),p=o.slice(-1),h=o.slice(-2);return t?"other":c&&1==i&&11!=u||1==p&&11!=h?"one":c&&i>=2&&4>=i&&(12>u||u>14)||p>=2&&4>=p&&(12>h||h>14)?"few":"other"},ca:function(e,t){var r=String(e).split("."),n=!r[1];return t?1==e||3==e?"one":2==e?"two":4==e?"few":"other":1==e&&n?"one":"other"},ce:_cp[1],cgg:_cp[1],chr:_cp[1],ckb:_cp[1],cs:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1];return t?"other":1==e&&o?"one":n>=2&&4>=n&&o?"few":o?"other":"many"},cy:function(e,t){return t?0==e||7==e||8==e||9==e?"zero":1==e?"one":2==e?"two":3==e||4==e?"few":5==e||6==e?"many":"other":0==e?"zero":1==e?"one":2==e?"two":3==e?"few":6==e?"many":"other"},da:function(e,t){var r=String(e).split("."),n=r[0],o=Number(r[0])==e;return t?"other":1!=e&&(o||0!=n&&1!=n)?"other":"one"},de:_cp[3],dsb:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-2),u=o.slice(-2);return t?"other":c&&1==i||1==u?"one":c&&2==i||2==u?"two":c&&(3==i||4==i)||3==u||4==u?"few":"other"},dv:_cp[1],dz:_cp[0],ee:_cp[1],el:_cp[1],en:function(e,t){var r=String(e).split("."),n=!r[1],o=Number(r[0])==e,c=o&&r[0].slice(-1),i=o&&r[0].slice(-2);return t?1==c&&11!=i?"one":2==c&&12!=i?"two":3==c&&13!=i?"few":"other":1==e&&n?"one":"other"},eo:_cp[1],es:_cp[1],et:_cp[3],eu:_cp[1],fa:function(e,t){return t?"other":e>=0&&1>=e?"one":"other"},ff:function(e,t){return t?"other":e>=0&&2>e?"one":"other"},fi:_cp[3],fil:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=o.slice(-1);return t?1==e?"one":"other":c&&(1==n||2==n||3==n)||c&&4!=i&&6!=i&&9!=i||!c&&4!=u&&6!=u&&9!=u?"one":"other"},fo:_cp[1],fr:function(e,t){return t?1==e?"one":"other":e>=0&&2>e?"one":"other"},fur:_cp[1],fy:_cp[3],ga:function(e,t){var r=String(e).split("."),n=Number(r[0])==e;return t?1==e?"one":"other":1==e?"one":2==e?"two":n&&e>=3&&6>=e?"few":n&&e>=7&&10>=e?"many":"other"},gd:function(e,t){var r=String(e).split("."),n=Number(r[0])==e;return t?"other":1==e||11==e?"one":2==e||12==e?"two":n&&e>=3&&10>=e||n&&e>=13&&19>=e?"few":"other"},gl:_cp[3],gsw:_cp[1],gu:function(e,t){return t?1==e?"one":2==e||3==e?"two":4==e?"few":6==e?"many":"other":e>=0&&1>=e?"one":"other"},guw:_cp[2],gv:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=n.slice(-1),i=n.slice(-2);return t?"other":o&&1==c?"one":o&&2==c?"two":!o||0!=i&&20!=i&&40!=i&&60!=i&&80!=i?o?"other":"many":"few"},ha:_cp[1],haw:_cp[1],he:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=Number(r[0])==e,i=c&&r[0].slice(-1);return t?"other":1==e&&o?"one":2==n&&o?"two":o&&(0>e||e>10)&&c&&0==i?"many":"other"},hi:function(e,t){return t?1==e?"one":2==e||3==e?"two":4==e?"few":6==e?"many":"other":e>=0&&1>=e?"one":"other"},hr:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=n.slice(-2),p=o.slice(-1),h=o.slice(-2);return t?"other":c&&1==i&&11!=u||1==p&&11!=h?"one":c&&i>=2&&4>=i&&(12>u||u>14)||p>=2&&4>=p&&(12>h||h>14)?"few":"other"},hsb:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-2),u=o.slice(-2);return t?"other":c&&1==i||1==u?"one":c&&2==i||2==u?"two":c&&(3==i||4==i)||3==u||4==u?"few":"other"},hu:function(e,t){return t?1==e||5==e?"one":"other":1==e?"one":"other"},hy:function(e,t){return t?1==e?"one":"other":e>=0&&2>e?"one":"other"},id:_cp[0],ig:_cp[0],ii:_cp[0],"in":_cp[0],is:function(e,t){var r=String(e).split("."),n=r[0],o=Number(r[0])==e,c=n.slice(-1),i=n.slice(-2);return t?"other":o&&1==c&&11!=i||!o?"one":"other"},it:function(e,t){var r=String(e).split("."),n=!r[1];return t?11==e||8==e||80==e||800==e?"many":"other":1==e&&n?"one":"other"},iu:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},iw:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=Number(r[0])==e,i=c&&r[0].slice(-1);return t?"other":1==e&&o?"one":2==n&&o?"two":o&&(0>e||e>10)&&c&&0==i?"many":"other"},ja:_cp[0],jbo:_cp[0],jgo:_cp[1],ji:_cp[3],jmc:_cp[1],jv:_cp[0],jw:_cp[0],ka:function(e,t){var r=String(e).split("."),n=r[0],o=n.slice(-2);return t?1==n?"one":0==n||o>=2&&20>=o||40==o||60==o||80==o?"many":"other":1==e?"one":"other"},kab:function(e,t){return t?"other":e>=0&&2>e?"one":"other"},kaj:_cp[1],kcg:_cp[1],kde:_cp[0],kea:_cp[0],kk:function(e,t){var r=String(e).split("."),n=Number(r[0])==e,o=n&&r[0].slice(-1);return t?6==o||9==o||n&&0==o&&0!=e?"many":"other":1==e?"one":"other"},kkj:_cp[1],kl:_cp[1],km:_cp[0],kn:function(e,t){return t?"other":e>=0&&1>=e?"one":"other"},ko:_cp[0],ks:_cp[1],ksb:_cp[1],ksh:function(e,t){return t?"other":0==e?"zero":1==e?"one":"other"},ku:_cp[1],kw:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},ky:_cp[1],lag:function(e,t){var r=String(e).split("."),n=r[0];return t?"other":0==e?"zero":0!=n&&1!=n||0==e?"other":"one"},lb:_cp[1],lg:_cp[1],lkt:_cp[0],ln:_cp[2],lo:function(e,t){return t&&1==e?"one":"other"},lt:function(e,t){var r=String(e).split("."),n=r[1]||"",o=Number(r[0])==e,c=o&&r[0].slice(-1),i=o&&r[0].slice(-2);return t?"other":1==c&&(11>i||i>19)?"one":c>=2&&9>=c&&(11>i||i>19)?"few":0!=n?"many":"other"},lv:function(e,t){var r=String(e).split("."),n=r[1]||"",o=n.length,c=Number(r[0])==e,i=c&&r[0].slice(-1),u=c&&r[0].slice(-2),p=n.slice(-2),h=n.slice(-1);return t?"other":c&&0==i||u>=11&&19>=u||2==o&&p>=11&&19>=p?"zero":1==i&&11!=u||2==o&&1==h&&11!=p||2!=o&&1==h?"one":"other"},mas:_cp[1],mg:_cp[2],mgo:_cp[1],mk:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=n.slice(-2),p=o.slice(-1);return t?1==i&&11!=u?"one":2==i&&12!=u?"two":7!=i&&8!=i||17==u||18==u?"other":"many":c&&1==i||1==p?"one":"other"},ml:_cp[1],mn:_cp[1],mo:function(e,t){var r=String(e).split("."),n=!r[1],o=Number(r[0])==e,c=o&&r[0].slice(-2);return t?1==e?"one":"other":1==e&&n?"one":!n||0==e||1!=e&&c>=1&&19>=c?"few":"other"},mr:function(e,t){return t?1==e?"one":2==e||3==e?"two":4==e?"few":"other":e>=0&&1>=e?"one":"other"},ms:function(e,t){return t&&1==e?"one":"other"},mt:function(e,t){var r=String(e).split("."),n=Number(r[0])==e,o=n&&r[0].slice(-2);return t?"other":1==e?"one":0==e||o>=2&&10>=o?"few":o>=11&&19>=o?"many":"other"},my:_cp[0],nah:_cp[1],naq:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},nb:_cp[1],nd:_cp[1],ne:function(e,t){var r=String(e).split("."),n=Number(r[0])==e;return t?n&&e>=1&&4>=e?"one":"other":1==e?"one":"other"},nl:_cp[3],nn:_cp[1],nnh:_cp[1],no:_cp[1],nqo:_cp[0],nr:_cp[1],nso:_cp[2],ny:_cp[1],nyn:_cp[1],om:_cp[1],or:_cp[1],os:_cp[1],pa:_cp[2],pap:_cp[1],pl:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=n.slice(-1),i=n.slice(-2);return t?"other":1==e&&o?"one":o&&c>=2&&4>=c&&(12>i||i>14)?"few":o&&1!=n&&(0==c||1==c)||o&&c>=5&&9>=c||o&&i>=12&&14>=i?"many":"other"},prg:function(e,t){var r=String(e).split("."),n=r[1]||"",o=n.length,c=Number(r[0])==e,i=c&&r[0].slice(-1),u=c&&r[0].slice(-2),p=n.slice(-2),h=n.slice(-1);return t?"other":c&&0==i||u>=11&&19>=u||2==o&&p>=11&&19>=p?"zero":1==i&&11!=u||2==o&&1==h&&11!=p||2!=o&&1==h?"one":"other"},ps:_cp[1],pt:function(e,t){var r=String(e).split("."),n=Number(r[0])==e;return t?"other":n&&e>=0&&2>=e&&2!=e?"one":"other"},"pt-PT":_cp[3],rm:_cp[1],ro:function(e,t){var r=String(e).split("."),n=!r[1],o=Number(r[0])==e,c=o&&r[0].slice(-2);return t?1==e?"one":"other":1==e&&n?"one":!n||0==e||1!=e&&c>=1&&19>=c?"few":"other"},rof:_cp[1],root:_cp[0],ru:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=n.slice(-1),i=n.slice(-2);return t?"other":o&&1==c&&11!=i?"one":o&&c>=2&&4>=c&&(12>i||i>14)?"few":o&&0==c||o&&c>=5&&9>=c||o&&i>=11&&14>=i?"many":"other"},rwk:_cp[1],sah:_cp[0],saq:_cp[1],sdh:_cp[1],se:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},seh:_cp[1],ses:_cp[0],sg:_cp[0],sh:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=n.slice(-2),p=o.slice(-1),h=o.slice(-2);return t?"other":c&&1==i&&11!=u||1==p&&11!=h?"one":c&&i>=2&&4>=i&&(12>u||u>14)||p>=2&&4>=p&&(12>h||h>14)?"few":"other"},shi:function(e,t){var r=String(e).split("."),n=Number(r[0])==e;return t?"other":e>=0&&1>=e?"one":n&&e>=2&&10>=e?"few":"other"},si:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"";return t?"other":0==e||1==e||0==n&&1==o?"one":"other"},sk:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1];return t?"other":1==e&&o?"one":n>=2&&4>=n&&o?"few":o?"other":"many"},sl:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=n.slice(-2);return t?"other":o&&1==c?"one":o&&2==c?"two":o&&(3==c||4==c)||!o?"few":"other"},sma:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},smi:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},smj:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},smn:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},sms:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},sn:_cp[1],so:_cp[1],sq:function(e,t){var r=String(e).split("."),n=Number(r[0])==e,o=n&&r[0].slice(-1),c=n&&r[0].slice(-2);return t?1==e?"one":4==o&&14!=c?"many":"other":1==e?"one":"other"},sr:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=n.slice(-2),p=o.slice(-1),h=o.slice(-2);return t?"other":c&&1==i&&11!=u||1==p&&11!=h?"one":c&&i>=2&&4>=i&&(12>u||u>14)||p>=2&&4>=p&&(12>h||h>14)?"few":"other"},ss:_cp[1],ssy:_cp[1],st:_cp[1],sv:function(e,t){var r=String(e).split("."),n=!r[1],o=Number(r[0])==e,c=o&&r[0].slice(-1),i=o&&r[0].slice(-2);return t?1!=c&&2!=c||11==i||12==i?"other":"one":1==e&&n?"one":"other"},sw:_cp[3],syr:_cp[1],ta:_cp[1],te:_cp[1],teo:_cp[1],th:_cp[0],ti:_cp[2],tig:_cp[1],tk:_cp[1],tl:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=o.slice(-1);return t?1==e?"one":"other":c&&(1==n||2==n||3==n)||c&&4!=i&&6!=i&&9!=i||!c&&4!=u&&6!=u&&9!=u?"one":"other"},tn:_cp[1],to:_cp[0],tr:_cp[1],ts:_cp[1],tzm:function(e,t){var r=String(e).split("."),n=Number(r[0])==e;return t?"other":0==e||1==e||n&&e>=11&&99>=e?"one":"other"},ug:_cp[1],uk:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=Number(r[0])==e,i=c&&r[0].slice(-1),u=c&&r[0].slice(-2),p=n.slice(-1),h=n.slice(-2);return t?3==i&&13!=u?"few":"other":o&&1==p&&11!=h?"one":o&&p>=2&&4>=p&&(12>h||h>14)?"few":o&&0==p||o&&p>=5&&9>=p||o&&h>=11&&14>=h?"many":"other"},ur:_cp[3],uz:_cp[1],ve:_cp[1],vi:function(e,t){return t&&1==e?"one":"other"},vo:_cp[1],vun:_cp[1],wa:_cp[2],wae:_cp[1],wo:_cp[0],xh:_cp[1],xog:_cp[1],yi:_cp[3],yo:_cp[0],zh:_cp[0],zu:function(e,t){return t?"other":e>=0&&1>=e?"one":"other"}});</script>
+
+
+
+<dom-module id="i18n-format" assetpath="../bower_components/i18n-format/">
+  <template>
+  </template>
+</dom-module>
+<script>
+Polymer({
+  is: 'i18n-format',
+
+  /**
+   * Fired whenever the formatted text is rendered.
+   *
+   * @event rendered
+   */
+
+  properties: {
+    /**
+     * The locale for the template text.
+     * The typical value is bound to `{{effectiveLang}}` when the containing element has
+     * `BehaviorsStore.I18nBehavior`.
+     */
+    lang: {
+      type: String,
+      value: 'en',
+      reflectToAttribute: true,
+      observer: '_langChanged'
+    },
+
+    /**
+     * The parameter attribute name to identify parameters.
+     * No need to change in a normal usage.
+     */
+    paramAttribute: {
+      type: String,
+      value: 'param',
+      observer: '_paramAttributeChanged'
+    },
+
+    /**
+     * The parameter format in the template text.
+     * The `'n'` in the format means n-th parameter.
+     * No need to change in a normal usage.
+     */
+    paramFormat: {
+      type: String,
+      value: '{n}',
+      observer: '_paramFormatChanged'
+    },
+
+    /**
+     * When the boolean attribute `observe-params` is specified, 
+     * the template is re-rendered on every parameter mutation.
+     * If not specified, the template is re-rendered only on `lang` changes and template text changes.
+     *
+     * Note: If true, re-rendering may be performed muiltiple times redundantly on a locale change.
+     */
+    observeParams: {
+      type: Boolean,
+      value: true // TODO: optimize re-rendering
+    }
+  },
+
+  /**
+   * Default locale constant 'en'
+   */
+  DEFAULT_LANG: 'en',
+
+  ready: function () {
+    this._setupParams();
+  },
+
+  attached: function () {
+    this.render();
+  },
+
+  /**
+   * Traverse the local DOM and set up parameters and observers.
+   */
+  _setupParams: function () {
+    var n;
+    this.elements = Array.prototype.filter.call(
+      Polymer.dom(this).childNodes,
+      function (node) {
+        return node.nodeType === node.ELEMENT_NODE;
+      }
+    );
+    var needParamObservation = this.observeParams &&
+                               this.elements.length > 0 && 
+                               this.elements[0].tagName.toLowerCase() === 'json-data';
+    for (n = 0; n < this.elements.length; n++) {
+      if (n === 0) {
+        this.templateElement = this.elements[n];
+        this.templateTextNode = Polymer.dom(this.templateElement).childNodes[0];
+        this.observer = new MutationObserver(this._templateMutated.bind(this));
+        this.observer.observe(this.templateTextNode, { characterData: true });
+      }
+      else {
+        if (!this.elements[n].hasAttribute(this.paramAttribute)) {
+          this.elements[n].setAttribute(this.paramAttribute, '' + n);
+        }
+        if (needParamObservation) {
+          // TODO: childNodes[0] may not be a text node
+          this.observer.observe(Polymer.dom(this.elements[n]).childNodes[0], { characterData: true });
+          if (this.elements[n].tagName.toLowerCase() === 'i18n-number') {
+            this.listen(this.elements[n], 'rendered', 'render');
+          }
+        }
+      }
+    }
+    //console.log('i18n-format: _setupParams: elements = ' + this.elements);
+  },
+
+  /**
+   * MutationObserver callback of child text nodes to re-render on template text or parameter mutations.
+   *
+   * @param {Array} mutations Array of MutationRecord (https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver).
+   */
+  _templateMutated: function (mutations) {
+    mutations.forEach(function(mutation) {
+      switch (mutation.type) {
+      case 'characterData':
+        //console.log('i18n-format: ' + this.id + '._templateMutated(): characterData: tag = ' + 
+        //            Polymer.dom(mutation.target).parentNode.tagName.toLowerCase() + 
+        //            ' data = ' + mutation.target.data);
+        if (Polymer.dom(mutation.target).parentNode.tagName.toLowerCase() !== 'i18n-number') {
+          this.render();
+        }
+        break;
+      default:
+        break;
+      }
+    }, this);
+  },
+
+  /**
+   * Observer of `lang` property to re-render the template text.
+   *
+   * @param {string} lang New locale.
+   */
+  _langChanged: function (lang /*, oldLang */) {
+    //console.log('i18n-format: ' + this.id + '._langChanged() lang = ' + lang + ' oldLang = ' + oldLang);
+    if (this.elements &&
+        lang !== undefined &&
+        lang !== null &&
+        !lang.match(/^{{.*}}$/) &&
+        !lang.match(/^\[\[.*\]\]$/)) {
+      this.render();
+    }
+    //else {
+    //  console.log('i18n-format: skipping render()');
+    //}
+  },
+
+  /**
+   * Observer of `paramFormat` property to re-render the template text.
+   *
+   * @param {string} paramFormat New paramFormat.
+   * @param {string} oldParamFormat Old paramFormat.
+   */
+  _paramFormatChanged: function (paramFormat, oldParamFormat) {
+    //console.log('i18n-format: ' + this.id + '._paramFormatChanged() new = ' + paramFormat + ' old = ' + oldParamFormat);
+    if (this.elements &&
+        oldParamFormat !== undefined &&
+        paramFormat &&
+        this.lang !== undefined &&
+        this.lang !== null &&
+        !this.lang.match(/^{{.*}}$/) &&
+        !this.lang.match(/^\[\[.*\]\]$/)) {
+      this.lastTemplateText = undefined;
+      this.render();
+    }
+  },
+
+  /**
+   * Observer of `paramAttribute` property to reset parameter attributes.
+   *
+   * @param {string} paramAttribute New paramAttribute.
+   * @param {string} oldParamAttribute Old paramAttribute.
+   */
+  _paramAttributeChanged: function (paramAttribute, oldParamAttribute) {
+    //console.log('i18n-format: ' + this.id + '._paramAttributeChanged() new = ' + paramAttribute + ' old = ' + oldParamAttribute);
+    var n;
+    if (this.elements &&
+        oldParamAttribute !== undefined &&
+        paramAttribute &&
+        this.lang !== undefined &&
+        this.lang !== null &&
+        !this.lang.match(/^{{.*}}$/) &&
+        !this.lang.match(/^\[\[.*\]\]$/)) {
+      for (n = 1; n < this.elements.length; n++) {
+        this.elements[n].removeAttribute(oldParamAttribute);
+        if (!this.elements[n].hasAttribute(paramAttribute)) {
+          this.elements[n].setAttribute(paramAttribute, '' + n);
+        }
+      }
+      this.lastTemplateText = undefined;
+      this.render();
+    }
+  },
+
+  /**
+   * Detect the CLDR plural category of a number 
+   * with [`make-plural` library](https://github.com/eemeli/make-plural.js).
+   *
+   * @param {number} n The number to get the plural category for.
+   * @return {string} Plural category of the number. 
+   */
+  _getPluralCategory: function (n) {
+    var category = 'other';
+    var lang = this.lang || this.DEFAULT_LANG;
+    lang = lang.split(/[-_]/)[0];
+    if (window.plurals[lang]) {
+      category = window.plurals[lang](n);
+    }
+    else {
+      category = window.plurals.en(n);
+    }
+    //console.log('i18n-format: _getPluralCategory(' + n + ') = ' + category);
+    return category;
+  },
+
+  /**
+   * Select a template text by parameters.
+   *
+   * @return {string} Selected template text. 
+   */
+  _selectTemplateText: function () {
+    var templateText = '';
+    if (!this.templateElement) {
+      return templateText;
+    }
+    else if (this.templateElement.tagName.toLowerCase() === 'json-data') {
+      var templateObject;
+      try {
+        templateObject = JSON.parse(this.templateTextNode.data);
+      }
+      catch (ex) {
+        if (this.templateTextNode.data) {
+          console.warn('i18n-format: parse error in json-data');
+        }
+        return templateText;
+      }
+      var n;
+      for (n = 1;
+           typeof templateObject === 'object' && n < this.elements.length;
+           n++) {
+        var param = this.elements[n];
+        if (param.tagName.toLowerCase() === 'i18n-number') {
+          // plural selector
+          var category = this._getPluralCategory(param.number);
+          if (typeof param.number === 'undefined') {
+            // i18n-number is not ready
+            //console.log('i18n-format: i18n-number is not ready');
+            templateObject = undefined;
+          }
+          else if (templateObject[param.rawNumber]) {
+            templateObject = templateObject[param.rawNumber];
+          }
+          else if (templateObject[category]) {
+            // plural category matched
+            templateObject = templateObject[category];
+          }
+          else if (templateObject.other) {
+            // other
+            templateObject = templateObject.other;
+          }
+          else {
+            // default
+            templateObject = '';
+            console.warn('i18n-format: cannot find a template');
+          }
+        }
+        else {
+          // string selector
+          if (templateObject[param.textContent]) {
+            // template found
+            templateObject = templateObject[param.textContent];
+          }
+          else if (templateObject.other) {
+            // other
+            templateObject = templateObject.other;
+          }
+          else {
+            // default
+            templateObject = '';
+            console.warn('i18n-format: cannot find a template');
+          }
+        }
+      }
+      if (typeof templateObject === 'string') {
+        templateText = templateObject;
+      }
+      else if (typeof templateObject === 'undefined') {
+        templateText = undefined;
+      }
+      else {
+        templateText = '';
+        console.warn('i18n-format: cannot find a template');
+      }
+    }
+    else {
+      templateText = this.templateTextNode.data;
+    }
+    return templateText;
+  },
+
+  /**
+   * Render the template text.
+   */
+  render: function () {
+    var templateText = this._selectTemplateText();
+    var tmpNode = document.createElement('span');
+    var paramPlaceholder;
+    var childNodes = [];
+    var i;
+
+    if (templateText === this.lastTemplateText) {
+      //console.log('i18n-format: skipping rendering as the templateText has not changed');
+      return;
+    }
+    else if (typeof templateText === 'undefined') {
+      return;
+    }
+    else {
+      this.lastTemplateText = templateText;
+      //console.log('i18n-format: ' + this.id + '.render() templateText = ' + templateText);
+    }
+
+    i = 1;
+    while (i < this.elements.length) {
+      paramPlaceholder = this.paramFormat.replace('n', i);
+      templateText = templateText.replace(paramPlaceholder, 
+                      '<content select="[' + this.paramAttribute + '=\'' + i + '\']"></content>');
+      i++;
+    }
+    
+    tmpNode.innerHTML = templateText;
+
+    Polymer.dom(this.root).innerHTML = '';
+
+    // References of childNodes have to be copied for Shady DOM compatibility
+    for (i = 0; i < tmpNode.childNodes.length; i++) {
+      childNodes[i] = tmpNode.childNodes[i];
+    }
+
+    for (i = 0; i < childNodes.length; i++) {
+      // each node has to be appended via Polymer.dom()
+      Polymer.dom(this.root).appendChild(childNodes[i]);
+    }
+
+    this.fire('rendered');
+  }
+});
+</script>
+
+<dom-module id="i18n-attr-repo" assetpath="../bower_components/i18n-behavior/">
+  <template>
+    <template id="standard">
+      
+      <input placeholder="">
+
+      
+      <paper-input label="" error-message="" placeholder=""></paper-input>
+      <paper-textarea label="" error-message="" placeholder=""></paper-textarea>
+      <paper-dropdown-menu label=""></paper-dropdown-menu>
+      <paper-toast text=""></paper-toast>
+      <google-chart options="" cols="" rows="" data=""></google-chart>
+      <platinum-push-messaging title="" message=""></platinum-push-messaging>
+
+      
+      <json-data any-attributes=""></json-data>
+    </template>
+  </template>
+</dom-module>
+<script>
+  Polymer({
+    is: 'i18n-attr-repo',
+
+    ready: function () {
+      this.data = {};
+      this._traverseTemplateTree(this.$.standard._content || this.$.standard.content);
+    },
+
+    /**
+     * Judge if a specific attribute of an element requires localization.
+     *
+     * @param {string} element Target element name.
+     * @param {string} attr Target attribute name.
+     * @return {boolean} true if the target attribute of the element requires localization.
+     */
+    isLocalizableAttribute: function (element, attr) {
+      if (this.data[element]) {
+        return  !!this.data[element]['any-attributes'] ||
+                !!this.data[element][attr];
+      }
+      else {
+        return false;
+      }
+    },
+
+    /**
+     * Add a new localizable attribute of an element to the repository.
+     *
+     * @param {string} element Target element name.
+     * @param {string} attr Target attribute name.
+     * @param {?*} value Optional value for JSON attributes (not used yet)
+     */
+    setLocalizableAttribute: function (element, attr, value) {
+      this.data[element] = this.data[element] || {};
+      this.data[element][attr] = value ? value : true;
+    },
+
+    /**
+     * Pick up localizable attributes description for a custom element 
+     * from `text-attr` attribute and register them to the repository.
+     * The `text-attr` attribute is used in the template of a custom
+     * element to declare localizable attributes of its own element.
+     *
+     * Format:
+     *
+     *  Type 1: `<template text-attr="localizable-attr1 attr2">`
+     *
+     *  Type 2: `<template text-attr localizable-attr1 attr2="value2">`
+     *
+     * @param {string} element Target element name.
+     * @param {HTMLTemplateElement} template Template of the element.
+     */
+    registerLocalizableAttributes: function (element, template) {
+      if (!element) {
+        element = template.getAttribute('id');
+      }
+      if (element) {
+        var attrs = (template.getAttribute('text-attr') || '').split(' ');
+        var textAttr = false;
+        attrs.forEach(function (attr) {
+          if (attr) {
+            this.setLocalizableAttribute(element, attr, true);
+          }
+        }, this);
+        Array.prototype.forEach.call(template.attributes, function (attr) {
+          switch (attr.name) {
+          case 'id':
+          case 'lang':
+          case 'localizable-text':
+          case 'assetpath':
+            break;
+          case 'text-attr':
+            textAttr = true;
+            break;
+          default:
+            if (textAttr) {
+              this.setLocalizableAttribute(element, attr.name, attr.value);
+            }
+            break;
+          }
+        }.bind(this));
+      }
+    },
+
+    /**
+     * Traverse the template of `i18n-attr-repo` in the ready() callback
+     * and construct the localizable attributes repository object. The method calls itself
+     * recursively for traversal.
+     *
+     * @param {HTMLElement} node The target HTML node for traversing.
+     */    
+    _traverseTemplateTree: function (node) {
+      var name;
+      if (node.nodeType === node.ELEMENT_NODE) {
+        name = node.nodeName.toLowerCase();
+        Array.prototype.forEach.call(node.attributes, function (attribute) {
+          this.data[name] = this.data[name] || {};
+          if (attribute.value) {
+            this.data[name][attribute.name] = attribute.value;
+          }
+          else {
+            this.data[name][attribute.name] = true;
+          }
+        }, this);
+      }
+      if (node.childNodes.length > 0) {
+        for (var i = 0; i < node.childNodes.length; i++) {
+          this._traverseTemplateTree(node.childNodes[i]);
+        }
+      }
+    }
+  });
+</script><script>/*!
+ * @license deepcopy.js Copyright(c) 2013 sasa+1
+ * https://github.com/sasaplus1/deepcopy.js
+ * Released under the MIT license.
+ */
+!function(t,e){"use strict";"function"==typeof define&&define.amd?define(e):"object"==typeof exports?module.exports=e():t.deepcopy=e()}(this,function(){"use strict";function t(e,u,c,y){var p,s,a,l,b,j,d,g,O,A,h;if(null===e||"object"!=typeof e)return e;if(r.isDate(e))return new Date(+e);if(r.isRegExp(e))return p=String(e),s=p.lastIndexOf("/"),new RegExp(p.slice(1,s),p.slice(s+1));if(n(e))return a=new Buffer(e.length),e.copy(a),a;for(l=o(e).concat(i(e)),b=0,j=l.length;j>b;++b)d=l[b],g=e[d],null!==g&&"object"==typeof g&&(O=f(c,g),-1===O?(A=r.isArray(g)?[]:{},c.push(g),y.push(A)):h=y[O]),u[d]=h||t(g,A,c,y);return u}function deepcopy(e){var n=r.isArray(e)?[]:{},o=[e],i=[n];return t(e,n,o,i)}var e,r,n,o,i,f;return e="undefined"!=typeof process&&"undefined"!=typeof require,r=e?require("util"):function(){function t(t){return"object"==typeof t&&"[object Array]"===Object.prototype.toString.call(t)}function e(t){return"object"==typeof t&&"[object Date]"===Object.prototype.toString.call(t)}function r(t){return"object"==typeof t&&"[object RegExp]"===Object.prototype.toString.call(t)}function n(t){return"symbol"==typeof t}return{isArray:"function"==typeof Array.isArray?function(t){return Array.isArray(t)}:t,isDate:e,isRegExp:r,isSymbol:"function"==typeof Symbol?n:function(){return!1}}}(),n=e?function(t){return Buffer.isBuffer(t)}:function(){return!1},o="function"==typeof Object.keys?function(t){return Object.keys(t)}:function(t){var e,r=[];if(null===t||"object"!=typeof t)throw new TypeError("obj is not an Object");for(e in t)t.hasOwnProperty(e)&&r.push(e);return r},i="function"==typeof Symbol?function(t){return Object.getOwnPropertySymbols(t)}:function(){return[]},f="function"==typeof Array.prototype.indexOf?function(t,e){return t.indexOf(e)}:function(t,e){var n,o;if(!r.isArray(t))throw new TypeError("array is not an Array");for(n=0,o=t.length;o>n;++n)if(t[n]===e)return n;return-1},deepcopy});</script><script>
+/* jshint -W100 */
+(function(document) {
+  'use strict';
+
+  var html = document.querySelector('html');
+  // app global bundle storage
+  var bundles = { '': {} }; // with an empty default bundle
+  // app global default language
+  var defaultLang = html.hasAttribute('lang') ? html.getAttribute('lang') : '';
+  // shared fetching instances for bundles
+  var bundleFetchingInstances = {};
+
+  // path for locales from <html locales-path="locales">
+  var localesPath = html.hasAttribute('locales-path') ? 
+                      html.getAttribute('locales-path') : 'locales';
+
+  var userPreference = document.querySelector('iron-localstorage[name=i18n-behavior-preference]');
+
+  var attributesRepository = document.createElement('i18n-attr-repo');
+
+  // set up userPreference with two-way binding to html.lang
+  if (!userPreference) {
+    userPreference = document.createElement('iron-localstorage');
+    userPreference.setAttribute('name', 'i18n-behavior-preference');
+    userPreference.addEventListener('iron-localstorage-load-empty',
+      function () {
+        // preferred attribute in html to put higher priority
+        // in the default html language than navigator.language
+        userPreference.value = html.hasAttribute('preferred') ? defaultLang : navigator.language;
+      });
+
+    // append to body
+    document.querySelector('body').appendChild(userPreference);
+
+    // set html lang as userPreference
+    userPreference.addEventListener('value-changed',
+      function () {
+        if (html.getAttribute('lang') !== userPreference.value) {
+          html.setAttribute('lang', userPreference.value);
+        }
+      });
+
+    // observe html lang mutations
+    var htmlLangMutationObserver =
+          new MutationObserver(function (mutations) {
+            mutations.forEach(function(mutation) {
+              switch (mutation.type) {
+              case 'attributes':
+                if (mutation.attributeName === 'lang') {
+                  if (userPreference.value !== html.getAttribute('lang')) {
+                    userPreference.value = html.getAttribute('lang');
+                  }
+                }
+                break;
+              default:
+                break;
+              }
+            });
+          });
+    htmlLangMutationObserver.observe(html, { attributes: true });
+  }
+
+  window.BehaviorsStore = window.BehaviorsStore || {};
+  /**
+   * Apply `BehaviorsStore.I18nBehavior` to implement localizable elements.
+   *
+   *     <dom-module id="custom-element">
+   *       <template>
+   *         <span>Hard-coded UI texts are automatically made localizable</span>
+   *       </template>
+   *       <﻿﻿script﻿﻿>
+   *         Polymer({
+   *           is: 'custom-element',
+   *           behaviors: [ 
+   *             BehaviorsStore.I18nBehavior  // Add this behavior
+   *           ]
+   *         });
+   *       <﻿﻿/script﻿﻿>
+   *     </dom-module>
+   *
+   * `I18nBehavior` automatically extracts UI texts from `template` and 
+   * binds them to localizable variables in `this.text` object.
+   *
+   * According to the `lang` attribute value, `this.text`, and thus the bound UI texts,
+   * dynamically mutates by loading localized values from a JSON file in the `locales` directory.
+   * By default, `lang` attribute values of all the localizable elements with `I18nBehavior` are
+   * automatically updated according to `<html lang>` attribute value.
+   *
+   * The UI text externalization can be processed at build time as well by `gulp-*` task
+   * so that `I18nBehavior` can immediately recognize the extracted texts in JSON and 
+   * skip run-time externalization.
+   *
+   * Run-time externalization is suitable for development and debugging 
+   * since the code changes are immediately reflected at reloading without build-time preprocesses.
+   * In contrast, build-time externalization is suitable for production builds 
+   * since it eliminates run-time externalization overheads.
+   * 
+   * ### Steps to localize a custom element
+   *
+   * 1. [JavaScript] Add `BehaviorsStore.I18nBehavior` to `behaviors`
+   * 1. [gulp] Add `gulp-*` filter for `custom-element.html` and generate `custom-element.json`
+   * 1. [locales] Put `custom-element.lang.json` in `locales` directory
+   * 1. [translation] Translate `locales/custom-element.lang.json`
+   *
+   * - - -
+   *
+   * ### Directory structure of bundle files
+   *
+   * Normal bundles (`/element-root/locales/element-name.*.json`) for elements
+   * are stored under their root directories.
+   *
+   * Shared bundles (`/locales/bundle.*.json`) are generated at build time 
+   * by merging all the targeted bundles of the localizable elements. 
+   *
+   * Once the shared bundles are loaded, there should be no need to search for 
+   * normal bundles per element unless the element is intentionally excluded 
+   * from the shared bundles.
+   *
+   * ```
+   *      /bundle.json 
+   *      /locales/bundle.ja.json
+   *              /bundle.fr.json
+   *              /bundle.zh-Hans.json
+   *
+   *      /elements/my-list/my-list.json
+   *                       /locales/my-list.ja.json
+   *                               /my-list.zh-Hans.json
+   *
+   *               /google-chart-demo/google-chart-demo.json
+   *                                 /locales/google-chart-demo.ja.json
+   *                                         /google-chart-demo.fr.json
+   * ```
+   *
+   * - - -
+   *
+   * ### Localizable `<template is="i18n-dom-bind" id="app">` element
+   *
+   * `<template is="i18n-dom-bind">` template element extends 
+   * `<template is="dom-bind">` template element with all the capabilities of 
+   * `I18nBehavior`.  
+   *
+   * The `id` attribute value is used for naming bundle files instead of the element name.
+   * 
+   * The bundle files are stored at the locales directory under the application root. 
+   *
+   * ```
+   *      /app.json
+   *      /locales/app.ja.json
+   *              /app.fr.json
+   *              /app.zh-Hans.json
+   * ```
+   *
+   * - - -
+   *
+   * ### TODOs
+   *
+   * - Support compound bindings since Polymer 1.2
+   * - Normalize locale strings and eliminate case sensitivity
+   * - Support user locale preference per user
+   *
+   * @polymerBehavior BehaviorsStore.I18nBehavior
+   * @group I18nBehavior
+   * @hero hero.svg
+   * @demo demo/index.html
+   */
+  BehaviorsStore.I18nBehavior = {
+
+    /**
+     * Fired when the text message bundle object (`this.text`) is updated after `this.lang` is changed.
+     *
+     * @event lang-updated
+     */
+
+    /**
+     * Fired when a shared bundle is fetched.
+     *
+     * @event bundle-fetched
+     */
+
+    properties: {
+      /**
+       * The locale of the element.
+       * The default value is copied from `<html lang>` attribute of the current page.
+       * If `<html lang>` is not specified, `''` is set to use the template default language.
+       *
+       * The value is synchronized with `<html lang>` attribute of the current page by default.
+       *
+       * ### Note:
+       *  - The value may not reflect the current UI locale until the localized texts are loaded.
+       */
+      lang: {
+        type: String,
+        value: function () { return defaultLang; },
+        reflectToAttribute: true,
+        observer: '_langChanged'
+      },
+
+      /**
+       * Text message bundle object for the current locale.
+       * The object is shared among all the instances of the same element.
+       * The value is updated when `lang-updated` event is fired.
+       */
+      text: {
+        type: Object,
+        computed: '_getBundle(lang)'
+      },
+
+      /**
+       * Data model bundle object for the current locale.
+       * The data are bound to localizable attribute values in the element template.
+       * The object is cloned from `this.text.model` per instance.
+       * The value is NOT automatically updated in sync with `this.text`.
+       * 
+       * How to manually update the model object when `lang-updated` event is fired:
+       * ```
+       *     this.model = deepcopy(this.text.model);
+       * ```
+       */
+      model: {
+        type: Object,
+        notify: true
+      },
+
+      /**
+       * The locale of the hard-coded texts in the element's template.
+       * The read-only value can be specified by the `lang` attribute of the element's `template`.
+       * The default value is 'en' if not specified in the `template` element.
+       *
+       * ```
+       *  <dom-module id="custom-element">
+       *    <template lang="en">
+       *      <span>Hard-coded text in English</span>
+       *    </template>
+       *  <dom-module>
+       * ```
+       */
+      templateDefaultLang: {
+        type: String,
+        readOnly: true,
+        value: function () {
+          if (!this._templateDefaultLang) {
+            var template = Polymer.DomModule.import(this.is, 'template');
+            if (template) {
+              this._templateDefaultLang = template.hasAttribute('lang') ? template.lang : 'en';
+            }
+            else {
+              this._templateDefaultLang = 'en';
+            }
+          }
+          var templateDefaultLang = this._templateDefaultLang;
+          return templateDefaultLang;
+        }
+      },
+
+      /**
+       * The effective locale of the element.
+       * The value is updated when the localized texts are loaded and `lang-updated` event is fired.
+       */
+      effectiveLang: {
+        type: String
+      },
+
+      /**
+       * Boolean flag to synchronize with the value of  `<html lang>` attribute.
+       */
+      observeHtmlLang: {
+        type: Boolean,
+        value: true,
+        observer: '_observeHtmlLangChanged'
+      }
+    },
+
+    listeners: {
+      'lang-updated': '_updateEffectiveLang'
+    },
+
+    /* 
+       bundles = 
+       {
+        "": {},
+        "en": {
+          "my-list": {
+            "p_2": "You now have:",
+            "model": {
+              "list": {
+                "items": [
+                  "item 1", "item 2"
+                ]
+              }
+            }
+          },
+          "google-chart-demo": {
+            "simple-chart-desc": [
+              "template {1} string", "param 1"
+            ]
+            "model": {
+              "simple-chart": {
+                "options": { "title": "Simple Chart" },
+                "rows": []
+              }
+            }
+          }
+        },
+        "ja": {
+          "my-list": {},
+          "google-chart-demo": {}
+        }
+      }
+
+      bundles[lang]
+      /bundle.json - fallback
+      /locales/bundle.en.json
+              /bundle.ja.json
+              /bundle.fr.json
+              /bundle.zh-Hans.json
+
+      bundles[lang][is]
+      /elements/my-list/my-list.json - fallback
+                       /locales/my-list.en.json
+                               /my-list.ja.json
+                               /my-list.zh-Hans.json
+
+               /google-chart-demo/google-chart-demo.json - fallback
+                                 /locales/google-chart-demo.en.json
+                                         /google-chart-demo.ja.json
+                                         /google-chart-demo.zh-Hans.json
+
+      app/elements/my-list/my-list.json
+                          /locales/my-list.fr.json
+                                  /my-list.ja.json
+                                  /my-list.zh-Hans.json
+
+      dist/elements/my-list/my-list.json
+                           /locales/my-list.fr.json
+                                   /my-list.ja.json
+                                   /my-list.zh-Hans.json
+
+    */
+
+
+    /**
+     * The backend logic for `this.text` object.
+     *
+     * @param {string} lang Locale for the text message bundle.
+     * @return {Object} Text message bundle for the locale.
+     */
+    _getBundle: function (lang) {
+      //console.log('_getBundle called for ' + this.is + ' with lang = ' + lang);
+
+      var resolved;
+      var id = this.is === 'i18n-dom-bind' ? this.id : this.is;
+
+      if (lang && lang.length > 0) {
+        var fallbackLanguageList = this._enumerateFallbackLanguages(lang);
+        var tryLang;
+        while ((tryLang = fallbackLanguageList.shift())) {
+          if (!bundles[tryLang]) {
+            // set up an empty bundle for the language if missing
+            bundles[tryLang] = {};
+          }
+          if (bundles[tryLang][id]) {
+            // bundle found
+            resolved = bundles[tryLang][id];
+            break;
+          }
+        }
+      }
+      else {
+        // lang is not specified
+        lang = '';
+        resolved = bundles[lang][id];
+      }
+
+      // Fallback priorities: last > app default > element default > fallback > {}
+      // TODO: need more research on fallback priorities
+      if (!resolved) { 
+        if (bundles[this._fetchStatus.lastLang] && bundles[this._fetchStatus.lastLang][id]) {
+          // old bundle for now (no changes should be shown)
+          resolved = bundles[this._fetchStatus.lastLang][id]; 
+        }
+        else if (defaultLang && defaultLang.length > 0 &&
+                 bundles[defaultLang] && bundles[defaultLang][id]) {
+          // app default language for now
+          resolved = bundles[defaultLang][id]; 
+        }
+        else if (this.templateDefaultLang && this.templateDefaultLang.length > 0 &&
+                 bundles[this.templateDefaultLang] && bundles[this.templateDefaultLang][id]) {
+          // element default language for now
+          resolved = bundles[this.templateDefaultLang][id]; 
+        }
+        else if (bundles[''][id]) {
+          // fallback language for now (this should be the same as element default)
+          resolved = bundles[''][id];
+        }
+        else {
+          // give up providing a bundle (this should not happen)
+          resolved = {};
+        }
+      }
+
+      return resolved;
+    },
+
+    /**
+     * Enumerate fallback locales for the target locale.
+     * 
+     * Casual subset implementation of BCP47 (https://tools.ietf.org/html/bcp47).
+     *
+     * ### Examples:
+     *
+     *| Target Locale | Fallback 1 | Fallback 2 |
+     *|:--------------|:-----------|:-----------|
+     *| ru            | N/A        | N/A        |
+     *| en-GB         | en         | N/A        |
+     *| fr-CA         | fr         | N/A        |
+     *| zh-Hans-CN    | zh-Hans    | zh         |
+     *
+     * ### TODOs:
+     *
+     * - Support aliases.
+     * - Normalize cases.
+     * 
+     * @param {string} lang Target locale.
+     * @return {Array} List of fallback locales including the target locale at the index 0.
+     */
+    _enumerateFallbackLanguages: function (lang) {
+      var result = [];
+      var parts;
+      if (!lang || lang.length === 0) {
+        result.push('');
+      }
+      else {
+        parts = lang.split(/[-_]/);
+        while (parts.length > 0) {
+          result.push(parts.join('-'));
+          parts.pop();
+        }
+      }
+      return result;
+    },
+
+    /**
+     * Get the next fallback locale for the target locale.
+     * 
+     * Casual subset implementation of BCP47 (https://tools.ietf.org/html/bcp47).
+     *
+     * ### Examples:
+     *
+     *| Target Locale | Next Fallback |
+     *|:--------------|:--------------|
+     *| ru            | null          |
+     *| en-GB         | en            |
+     *| fr-CA         | fr            |
+     *| zh-Hans-CN    | zh-Hans       |
+     *
+     * ### TODOs:
+     *
+     * - Support aliases.
+     * - Normalize cases.
+     * 
+     * @param {string} lang Target locale.
+     * @return {string} Next fallback locale. `null` if there are no fallback languages.
+     */
+    _getNextFallbackLanguage: function (lang) {
+      var nextFallbackLanguage = null;
+      if (lang && lang.length > 0) {
+        var parts = lang.split(/[-_]/);
+        if (parts.length >= 2) {
+          parts.pop();
+          nextFallbackLanguage = parts.join('-');
+        }
+      }
+      return nextFallbackLanguage;
+    },
+
+    /**
+     * Observer of `this.lang` changes.
+     *
+     * Update `this.text` object if the text message bundle of the new `lang` is locally available.
+     *
+     * Trigger fetching of the text message bundle of the new `lang` if the bundle is not locally available.
+     *
+     * @param {string} lang New value of `lang`.
+     * @param {string} oldLang Old value of `lang`.
+     */
+    _langChanged: function (lang, oldLang) {
+      //console.log(this.id + ':_langChanged lang = ' + lang + ' oldLang = ' + oldLang);
+      var id = (this.is || this.getAttribute('is')) === 'i18n-dom-bind' ? this.id : this.is;
+      lang = lang || ''; // undefined and null are treated as default ''
+      oldLang = oldLang || '';
+      if (lang !== oldLang &&
+          bundles[oldLang] && bundles[oldLang][id]) {
+        this._fetchStatus.lastLang = oldLang;
+      }
+      if (bundles[lang] && bundles[lang][id]) {
+        // bundle available for the new language
+        if (lang !== this._fetchStatus.ajaxLang) {
+          // reset error status
+          this._fetchStatus.error = null;
+        }
+        this.notifyPath('text', this._getBundle(this.lang));
+        this.fire('lang-updated', { 
+          lang: this.lang, 
+          oldLang: oldLang, 
+          lastLang: this._fetchStatus.lastLang 
+        });
+      }
+      else {
+        // fetch the missing bundle
+        this._fetchLanguage(lang);
+      }
+    },
+
+    /**
+     * Called on `lang-updated` events and update `this.effectiveLang` with the value of `this.lang`.
+     */
+    _updateEffectiveLang: function () {
+      //console.log('_updateEffectiveLang: lang = ' + this.lang);
+      this.effectiveLang = this.lang;
+    },
+
+    /**
+     * Trigger fetching of the appropriate text message bundle of the target locale.
+     *
+     * ### Two Layers of Fallbacks:
+     *
+     * 1. Missing bundles fall back to those of their fallback locales.
+     * 1. Missing texts in the non-default bundles fall back to those in the default bundle. 
+     *
+     * ### Fallback Examples:
+     *
+     *| Locale      | Bundle Status                    |
+     *|:------------|:---------------------------------|
+     *| fr-CA       | existent with sparse texts       |
+     *| fr          | existent with full texts         |
+     *| ja          | existent with some missing texts |
+     *| zh-Hans-CN  | missing                          |
+     *| zh-Hans     | existent with some missing texts |
+     *| zh          | missing                          |
+     *| en          | existent with full texts         |
+     *| ''(default) | existent with full texts         |
+     *
+     *| Target      | Fallback bundle       | Resolved locale |
+     *|:------------|:----------------------|:----------------|
+     *| en          | en                    | en              |
+     *| ja          | ja + ''(default)      | ja              |
+     *| fr-CA       | fr-CA + fr            | fr-CA           |
+     *| zh-Hans-CN  | zh-Hans + ''(default) | zh-Hans         |
+     *
+     * @param {string} lang Target locale.
+     */
+    _fetchLanguage: function (lang) {
+      if (this._fetchStatus) {
+        this._fetchStatus.fallbackLanguageList = this._enumerateFallbackLanguages(lang);
+        this._fetchStatus.fallbackLanguageList.push('');
+        this._fetchStatus.targetLang = this._fetchStatus.fallbackLanguageList.shift();
+        this._fetchBundle(this._fetchStatus.targetLang);
+      }
+    },
+
+    /**
+     * Fetch the text message bundle of the target locale 
+     * cooperatively with other instances.
+     *
+     * @param {string} lang Target locale.
+     */
+    _fetchBundle: function (lang) {
+      //console.log('_fetchBundle lang = ' + lang);
+      if (!lang || lang.length === 0) {
+        // handle empty cases
+        if (defaultLang && defaultLang.length > 0) {
+          lang = defaultLang; // app default language
+        }
+        else if (this.templateDefaultLang && this.templateDefaultLang.length > 0) {
+          lang = this.templateDefaultLang; // element default language
+        }
+        else {
+          lang = ''; // fallback default language
+        }
+      }
+
+      // set up an empty bundle if inexistent
+      bundles[lang] = bundles[lang] || {};
+      var id = this.is === 'i18n-dom-bind' ? this.id : this.is;
+
+      if (bundles[lang][id]) {
+        // bundle is available; no need to fetch
+        if (this._fetchStatus.targetLang === lang) {
+          // reset error status
+          this._fetchStatus.error = null;
+          if (this.lang === lang) {
+            this.notifyPath('text', this._getBundle(this.lang));
+            this.fire('lang-updated', { 
+              lang: this.lang, 
+              lastLang: this._fetchStatus.lastLang
+            });
+          }
+          else {
+            this.lang = lang; // trigger lang-updated event
+          }
+        }
+        else {
+          var nextFallbackLanguage = this._fetchStatus.fallbackLanguageList.shift();
+          // bundle is available; no need to fetch
+          this._fetchStatus.fetchingInstance = null;
+          if (nextFallbackLanguage) {
+            this._fetchBundle(nextFallbackLanguage);
+          }
+          else {
+            this._constructBundle(this._fetchStatus.targetLang);
+            // reset error status
+            this._fetchStatus.error = null;
+            if (this.lang === this._fetchStatus.targetLang) {
+              this.notifyPath('text', this._getBundle(this.lang));
+              this.fire('lang-updated', { 
+                lang: this.lang,
+                lastLang: this._fetchStatus.lastLang
+              });
+            }
+            else {
+              this.lang = this._fetchStatus.targetLang; // trigger lang-updated event
+            }
+          }
+        }
+      }
+      else if (this._fetchStatus.fetchingInstance) {
+        if (this._fetchStatus.fetchingInstance !== this) {
+          // fetching in progress by another instance
+          // TODO: redundant addEventListener multiple times
+          this._forwardLangEventBindThis = this._forwardLangEventBindThis ||
+                                            this._forwardLangEvent.bind(this);
+          this._fetchStatus.fetchingInstance
+              .addEventListener('lang-updated', this._forwardLangEventBindThis);
+        }
+      }
+      else if (bundleFetchingInstances[lang]) {
+        // fetching bundle.lang.json in progress by an instance of another element
+        this._fetchStatus.fetchingInstance = this;
+        this._fetchStatus.ajaxLang = lang;
+        this._handleBundleFetchedBindThis = this._handleBundleFetchedBindThis ||
+                                            this._handleBundleFetched.bind(this);
+        bundleFetchingInstances[lang]
+          .addEventListener('bundle-fetched', this._handleBundleFetchedBindThis);
+        //console.log(this.is + ' addEventListener bundle-fetched');
+      }
+      else {
+        // proceed to fetch
+        this._fetchStatus.fetchingInstance = this;
+        if (!this._fetchStatus.ajax) {
+          // set up ajax client
+          this._fetchStatus.ajax = Polymer.Base.create('iron-ajax');
+          this._fetchStatus.ajax.handleAs = 'json';
+          this._fetchStatus.ajax.addEventListener('response', this._handleResponse.bind(this));
+          this._fetchStatus.ajax.addEventListener('error', this._handleError.bind(this));
+        }
+        // TODO: app global bundles have to be handled
+        var url;
+
+        if (lang === '') {
+          url = this.resolveUrl(id + '.json');
+        }
+        else {
+          if (bundles[lang] && bundles[lang].bundle) {
+            // missing in the bundle
+            url = this.resolveUrl(localesPath + '/' + id + '.' + lang + '.json');
+          }
+          else {
+            // fetch the bundle
+            bundleFetchingInstances[lang] = this;
+            url = this.resolveUrl(window.location.pathname.replace(/\/[^\/]*$/,'/') + localesPath + '/bundle.' + lang + '.json');
+          }
+        }
+        this._fetchStatus.ajax.url = url;
+        this._fetchStatus.ajaxLang = lang;
+        try {
+          this._fetchStatus.error = null;
+          this._fetchStatus.ajax.generateRequest();
+        }
+        catch (e) {
+          // TODO: extract error message from the exception e
+          this._handleError({ detail: { error: 'ajax request failed: ' + e }});
+        }
+      }
+    },
+
+    /**
+     * Handle Ajax success response for a bundle.
+     *
+     * @param {Object} event `iron-ajax` success event.
+     */
+    _handleResponse: function (event) {
+      //console.log('_handleResponse ajaxLang = ' + this._fetchStatus.ajaxLang);
+      if (this._fetchStatus.ajax.url.indexOf('/' + localesPath + '/bundle.') >= 0) {
+        bundles[this._fetchStatus.ajaxLang] = bundles[this._fetchStatus.ajaxLang] || {};
+        this._deepMap(bundles[this._fetchStatus.ajaxLang],
+                      event.detail.response,
+                      function (text) { return text; });
+        bundles[this._fetchStatus.ajaxLang].bundle = true;
+        bundleFetchingInstances[this._fetchStatus.ajaxLang] = null;
+        //console.log('bundle-fetched ' + this.is + ' ' + this._fetchStatus.ajaxLang);
+        this.fire('bundle-fetched', { success: true, lang: this._fetchStatus.ajaxLang });
+        var id = this.is === 'i18n-dom-bind' ? this.id : this.is;
+        if (bundles[this._fetchStatus.ajaxLang][id]) {
+          this._fetchStatus.lastResponse = bundles[this._fetchStatus.ajaxLang][id];
+        }
+        else {
+          // bundle does not contain text for this.is
+          this._fetchStatus.fetchingInstance = null;
+          this._fetchBundle(this._fetchStatus.ajaxLang);
+          return;
+        }
+      }
+      else {
+        this._fetchStatus.lastResponse = event.detail.response;
+      }
+      if (this._fetchStatus.lastResponse) {
+        var nextFallbackLanguage = this._fetchStatus.fallbackLanguageList.shift();
+        // store the raw response
+        this._fetchStatus.rawResponses[this._fetchStatus.ajaxLang] = 
+          this._fetchStatus.lastResponse;
+
+        this._fetchStatus.fetchingInstance = null;
+        if (nextFallbackLanguage) {
+          this._fetchBundle(nextFallbackLanguage);        
+        }
+        else {
+          this._fetchBundle('');
+        }
+      }
+      else {
+        event.detail.error = 'empty response for ' + this._fetchStatus.ajax.url;
+        this._handleError(event);
+      }
+    },
+
+    /**
+     * Handle Ajax error response for a bundle.
+     *
+     * @param {Object} event `iron-ajax` error event.
+     */
+    _handleError: function (event) {
+      var nextFallbackLanguage;
+      this._fetchStatus.fetchingInstance = null;
+      if (this._fetchStatus.ajax.url.indexOf('/' + localesPath + '/bundle.') >= 0) {
+        bundles[this._fetchStatus.ajaxLang] = bundles[this._fetchStatus.ajaxLang] || {};
+        bundles[this._fetchStatus.ajaxLang].bundle = true;
+        bundleFetchingInstances[this._fetchStatus.ajaxLang] = null;
+        // falls back to its element-specific bundle
+        this._fetchBundle(this._fetchStatus.ajaxLang);
+        //console.log('bundle-fetched ' + this.is + ' ' + this._fetchStatus.ajaxLang);
+        this.fire('bundle-fetched', { success: false, lang: this._fetchStatus.ajaxLang });
+        return;
+      }
+      nextFallbackLanguage = this._fetchStatus.fallbackLanguageList.shift();
+      if (this._fetchStatus.ajaxLang === this._fetchStatus.targetLang) {
+        if (nextFallbackLanguage) {
+          //console.log(this.is + ': ' + this._fetchStatus.ajaxLang +
+          //            ' falls back to ' + nextFallbackLanguage);
+          this._fetchStatus.targetLang = nextFallbackLanguage;
+          this._fetchBundle(nextFallbackLanguage);
+        }
+        else {
+          this._fetchStatus.error = event.detail.error;
+          console.error(this._fetchStatus.error);
+          // falls back to default
+          this.lang = '';
+        }
+      }
+      else {
+        // fetching dependent fallback languages
+        if (nextFallbackLanguage) {
+          //console.log(this.is + ': ' + this._fetchStatus.ajaxLang +
+          //            ' is missing and skipped');
+          //console.log(this.is + ': step to the next dependent fallback ' +
+          //            nextFallbackLanguage);
+          this._fetchBundle(nextFallbackLanguage);
+        }
+        else {
+          this._fetchBundle('');
+        }
+      }
+    },
+
+    /**
+     * Forward `lang-updated` event to other instances of the same element.
+     *
+     * @param {Object} event `lang-updated` event object.
+     */
+    _forwardLangEvent: function (event) {
+      //console.log('_forwardLangEvent ' + this.is + ' ' + event.detail.lang);
+      event.target.removeEventListener(event.type, this._forwardLangEventBindThis);
+      if (this.lang === event.detail.lang) {
+        this.notifyPath('text', this._getBundle(this.lang));
+        this.fire(event.type, event.detail);
+      }
+      else {
+        this.lang = event.detail.lang;
+        this.notifyPath('text', this._getBundle(this.lang));
+      }
+    },
+
+    /**
+     * Handle `bundle-fetched` event.
+     *
+     * @param {Object} event `bundle-fetched` event object.
+     */
+    _handleBundleFetched: function (event) {
+      var detail = event.detail;
+      //console.log('_handleBundleFetched ' + this.is + ' ' + detail.lang);
+      event.target.removeEventListener(event.type, this._handleBundleFetchedBindThis);
+      if (this._fetchStatus.ajaxLang === detail.lang) {
+        this._fetchStatus.fetchingInstance = null;
+        this._fetchBundle(this._fetchStatus.ajaxLang);
+      }
+    },
+
+    /**
+     * Handle changes of `observeHtmlLang` property.
+     *
+     * @param {Boolean} value Value of `observeHtmlLang`
+     */
+    _observeHtmlLangChanged: function (value) {
+      if (value) {
+        this._htmlLangObserver = this._htmlLangObserver || 
+          new MutationObserver(this._handleHtmlLangChange.bind(this));
+        this._htmlLangObserver.observe(html, { attributes: true });
+      }
+      else {
+        if (this._htmlLangObserver) {
+          this._htmlLangObserver.disconnect();
+        }
+      }
+    },
+
+    /**
+     * MutationObserver callback of `<html lang>` attribute.
+     *
+     * @param {Array} mutations Array of MutationRecord (https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver).
+     */
+    _handleHtmlLangChange: function (mutations) {
+      mutations.forEach(function(mutation) {
+        switch (mutation.type) {
+        case 'attributes':
+          if (mutation.attributeName === 'lang') {
+            this.lang = html.lang;
+          }
+          break;
+        default:
+          break;
+        }
+      }, this);
+    },
+
+    /**
+     * Construct the text message bundle of the target locale with fallback of missing texts.
+     *
+     * @param {strings} lang Target locale.
+     */
+    _constructBundle: function (lang) {
+      var fallbackLanguageList = this._enumerateFallbackLanguages(lang);
+      var bundle = {};
+      var raw;
+      var baseLang;
+      var id = this.is === 'i18n-dom-bind' ? this.id : this.is;
+      var i;
+      fallbackLanguageList.push('');
+      for (i = 0; i < fallbackLanguageList.length; i++) {
+        if (bundles[fallbackLanguageList[i]] &&
+            bundles[fallbackLanguageList[i]][id]) {
+          break;
+        }
+      }
+      fallbackLanguageList.splice(i + 1, fallbackLanguageList.length);
+      while ((baseLang = fallbackLanguageList.pop()) !== undefined) {
+        if (bundles[baseLang][id]) {
+          bundle = deepcopy(bundles[baseLang][id]);
+        }
+        else {
+          raw = this._fetchStatus.rawResponses[baseLang];
+          if (raw) {
+            this._deepMap(bundle, raw, function (text) { return text; });
+          }
+        }
+      }
+      // store the constructed bundle
+      if (!bundles[lang]) {
+        bundles[lang] = {};
+      }
+      bundles[lang][id] = bundle;
+    },
+
+    /**
+     * Construct a pseudo-bundle for the target locale. (Not used for now)
+     *
+     * @param {string} lang Target locale.
+     */
+    _constructPseudoBundle: function (lang) {
+      var bundle = {};
+      var id = this.is === 'i18n-dom-bind' ? this.id : this.is;
+      this._deepMap(bundle, bundles[''][id], function (value) {
+        return typeof value === 'string' ? lang + ' ' + value : value;
+      });
+      bundles[lang] = bundles[lang] || {};
+      bundles[lang][id] = bundle;
+      return bundle;
+    },
+
+    /**
+     * Recursively map the source object onto the target object with the specified map function.
+     * 
+     * The method is used to merge a bundle into its fallback bundle.
+     *
+     * @param {Object} target Target object.
+     * @param {Object} source Source object.
+     * @param {Function} map Mapping function.
+     */
+    _deepMap: function (target, source, map) {
+      var value;
+      for (var prop in source) {
+        value = source[prop];
+        switch (typeof value) {
+        case 'string':
+        case 'number':
+        case 'boolean':
+          target[prop] = map(value, prop);
+          break;
+        case 'object':
+          if (Array.isArray(value)) {
+            // TODO: cannot handle deep objects properly
+            target[prop] = target[prop] || [];
+            this._deepMap(target[prop], value, map);
+          }
+          else {
+            target[prop] = target[prop] || {};
+            this._deepMap(target[prop], value, map);
+          }
+          break;
+        case 'function':
+        case 'symbol':
+        case 'undefined':
+          target[prop] = value;
+          break;
+        default:
+          target[prop] = value;
+          break;
+        }
+      }
+    },
+
+    /**
+     * Construct the default bundle from the element's template.
+     *
+     * Extract the default bundle from the template if it is embedded as JSON at build time.
+     *
+     * ### Hard-coded UI text example:
+     * ```
+     *   <dom-module id="custom-element">
+     *     <template>
+     *       <span id="label">UI Text Label:</span>
+     *       <input id="input-el"
+     *              value="{{keyword}}"
+     *              placeholder="Keyword">
+     *     </template>
+     *   </dom-module>
+     * ```
+     *
+     * ### Constructed default bundle for the above example:
+     * ```
+     *   {
+     *     "model" : {
+     *       "input-el": {
+     *         "placeholder": "Keyword"
+     *       }
+     *     },
+     *     "label": "UI Text Label:"
+     *   }
+     * ```
+     *
+     * ### Processed template with bound annotations for the above example:
+     * ```
+     *   <dom-module id="custom-element">
+     *     <template localizable-text="embedded">
+     *       <span id="label">{{text.label}}</span>
+     *       <input id="input-el"
+     *         value="{{keyword}}"
+     *         placeholder="{{model.input-el.placeholder}}">
+     *     </template>
+     *   </dom-module>
+     * ```
+     *
+     * ### Embedded JSON bundle format for the above example:
+     * ```
+     *   <dom-module id="custom-element">
+     *     <template localizable-text="embedded">
+     *       <span id="label">{{text.label}}</span>
+     *       <input id="input-el"
+     *         value="{{keyword}}"
+     *         placeholder="{{model.input-el.placeholder}}">
+     *       <template id="localizable-text">
+     *         <json-data>{
+     *           "model" : {
+     *             "input-el": {
+     *               "placeholder": "Keyword"
+     *             }
+     *           },
+     *           "label": "UI Text Label:"
+     *         }</json-data>
+     *       </template>
+     *     </template>
+     *   </dom-module>
+     * ```
+     */
+    _constructDefaultBundle: function () {
+      var template;
+      var id = this.is;
+      if (this.is === 'i18n-dom-bind') {
+        template = this;
+        id = this.id;
+        if (template.content.childNodes.length === 0) {
+          // Find the real template in Internet Explorer 11 when i18n-dom-bind is concealed in a parent template
+          template = Array.prototype.map.call(document.querySelectorAll('template'), function (parentTemplate) {
+            return parentTemplate.content.querySelector('template#' + id + '[is="i18n-dom-bind"]');
+          }).reduce(function (prev, current) {
+            return prev || current;
+          });
+          // Patch this.content with the real one
+          if (template) {
+            this.content = template.content;
+          }
+        }
+      }
+      else {
+        template = Polymer.DomModule.import(id, 'template');
+      }
+      if (!template) {
+        return false;
+      }
+      var bundle = {};
+      var path = [];
+      var templateDefaultLang = this.getPropertyInfo('templateDefaultLang').value();
+      var localizableText, jsonData;
+
+      // register localizable attributes of the element itself
+      attributesRepository.registerLocalizableAttributes(id, template);
+
+      if (template.getAttribute('localizable-text') === 'embedded') {
+        // pick up embedded JSON from the template
+        localizableText = template.content.querySelector('#localizable-text');
+        if (localizableText) {
+          jsonData = localizableText.content.querySelector('json-data');
+          if (jsonData) {
+            bundle = JSON.parse(jsonData.textContent);
+          }
+          else {
+            console.error('<json-data> not found in <template id=\"localizable-text\">');
+          }
+        }
+        else {
+          console.error('<template id=\"localizable-text\"> not found');
+        }
+      }
+      else {
+        // traverse template to generate bundle
+        this._traverseTemplateTree(template.content, path, bundle, 0);
+      }
+      //console.log('template = ');
+      //console.log(template);
+
+      if (bundle.model) {
+        bundles[''][id] = bundle;
+        bundles[templateDefaultLang] = bundles[templateDefaultLang] || {};
+        bundles[templateDefaultLang][id] = bundle;
+      }
+      else {
+        // TODO: handle default language fetching
+        this._fetchLanguage('');
+      }
+
+      // merge default text into bundle
+      this._mergeDefaultText(bundle);
+      //console.log('text = ');
+      //console.log(bundle);
+
+      return true;
+    },
+
+    /**
+     * Traverse localizable attributes of the target element node and 
+     * add them to the target bundle under the `model` object.
+     * 
+     * The `<i18n-attr-repo>` object is used 
+     * to judge if the target attributes are localizable.
+     *
+     * @param {Object} node Target element node.
+     * @param {string} path Path to the target node.
+     * @param {Object} bundle Default bundle.
+     */
+    _traverseAttributes: function (node, path, bundle) {
+      var name = node.nodeName.toLowerCase();
+      var id = node.getAttribute ?
+                 (node.getAttribute('text-id') ||
+                  node.getAttribute('id')) : null;
+      var text;
+      var messageId;
+      var attrId;
+      // pick up element attributes
+      Array.prototype.forEach.call(node.attributes, function (attribute) {
+        text = attribute.value;
+        switch (attribute.name) {
+        // TODO: need more research on the list of excluded attributes
+        case 'id':
+        case 'text-id':
+        case 'is':
+        case 'lang':
+        case 'class':
+        case 'href':
+        case 'src':
+        case 'style':
+        case 'url':
+        case 'value':
+        case 'selected':
+          break;
+        default:
+          if (!attributesRepository.isLocalizableAttribute(name, attribute.name)) {
+            break;
+          }
+          if (text.length === 0) {
+            // skip empty value attribute
+          }
+          else if (text.match(/^{{.*}}$/) || text.match(/^\[\[.*\]\]$/)) {
+            // skip annotation attribute
+          }
+          else if (text.replace(/\n/g, ' ').match(/^{.*}$/g) || text.replace(/\n/g, ' ').match(/^\[.*\]$/g)) {
+            // generate message id
+            messageId = this._generateMessageId(path, id);
+            try {
+              //console.log(messageId + ' parsing attribute ' + attribute.name + ' = ' + text);
+              var value = JSON.parse(text.replace(/\n/g, ' '));
+              //console.log('parsed JSON object = ');
+              //console.log(value);
+              switch (typeof value) {
+              case 'string':
+              case 'number':
+              case 'object':
+                // put into model
+                attrId = ['model', messageId, attribute.name].join('.');
+                this._setBundleValue(bundle, attrId, value);
+                attribute.value = '{{' + attrId + '}}';
+                break;
+              default: // skip other types
+                break;
+              }
+            }
+            catch (e) {
+              // invalid JSON
+              console.warn(e, 'Invalid JSON at <' + name + ' ' + attribute.name + '> with value = ' + text);
+            }
+          }
+          else {
+            // string attribute
+            messageId = this._generateMessageId(path, id);
+            attrId = ['model', messageId, attribute.name].join('.');
+            this._setBundleValue(bundle, attrId, text);
+            attribute.value = '{{' + attrId + '}}';
+          }
+          break;
+        }
+      }, this);
+    },
+
+    /**
+     * Recursively traverse text contents of the target element node
+     * and add them to the target bundle object.
+     *
+     * Traversed text contents are replaced with annotations 
+     * for the corresponding text in the bundle.
+     *
+     * - - -
+     *
+     * There are some special treatments in the following cases.
+     *
+     * ### Sentence with parameterized child parameter-like elements:
+     *
+     * As the order of the parameters can change in different languages,
+     * `<i18n-format>` element is used to make the sentence localizable.
+     *
+     * ### Before processing
+     *
+     * ```
+     *   <p id="p"><code>i18n-format</code> is 
+     *     used for  
+     *     <a href="https://www.google.com">parameterized</a> 
+     *     sentences.</p>
+     * ```
+     *
+     * ### After processing
+     *
+     * ```
+     *   <p id="p">
+     *     <i18n-format lang="{{effectiveLang}}">
+     *       <span>{{text.p.0}}</span>
+     *       <code>{{text.p.1}}</code>
+     *       <a href="https://www.google.com">{{text.p.2}}</a>
+     *     </i18n-format>
+     *   </p>
+     * ```
+     *
+     * ### Constructed bundle data: Texts are stored in an Array of strings.
+     *
+     * ```
+     *   {
+     *     "p" : [
+     *       "{1} is\n used for\n {2}\n sentences.",
+     *       "i18n-format",
+     *       "parameterized"
+     *     ]
+     *   }
+     * ```
+     *
+     * - - -
+     *
+     * ### `<i18n-format>` element with compound templates:
+     *
+     * Texts with compound templates for `<i18n-format>` element are
+     * processed as below.
+     *
+     * `lang="{{effectiveLang}}"` attribute is added to `<i18n-format>` node
+     * as well as `<i18n-number>` node.
+     *
+     * ### Before processing
+     *
+     * ```
+     * <i18n-format id="sentence">
+     *   <json-data>{
+     *     "0": "You ({3}) gave no gifts.",
+     *     "1": {
+     *       "male": "You ({3}) gave him ({4}) {5}.",
+     *       "female": "You ({3}) gave her ({4}) {5}.",
+     *       "other": "You ({3}) gave them ({4}) {5}."
+     *     },
+     *     "one": {
+     *       "male": 
+     *         "You ({3}) gave him ({4}) and one other {5}.",
+     *       "female": 
+     *         "You ({3}) gave her ({4}) and one other {5}.",
+     *       "other": 
+     *         "You ({3}) gave them ({4}) and one other {5}."
+     *     },
+     *     "other": 
+     *       "You ({3}) gave them ({4}) and {1} others gifts."
+     *   }</json-data>
+     *   <i18n-number 
+     *     offset="1"
+     *     >{{recipients.length}}</i18n-number>
+     *   <span>{{recipients.0.gender}}</span>
+     *   <span>{{sender.name}}</span>
+     *   <span>{{recipients.0.name}}</span>
+     *   <span>a gift</span>
+     * </i18n-format>
+     * ```
+     *
+     * ### After processing
+     *
+     * ```
+     * <i18n-format id="sentence" 
+     *              lang="{{effectiveLang}}">
+     *   <json-data>{{serialize(text.sentence.0)}}</json-data>
+     *   <i18n-number 
+     *     offset="1"
+     *     lang="{{effectiveLang}}"
+     *     >{{recipients.length}}</i18n-number>
+     *   <span>{{recipients.0.gender}}</span>
+     *   <span>{{sender.name}}</span>
+     *   <span>{{recipients.0.name}}</span>
+     *   <span>{{text.sentence.5}}</span>
+     * </i18n-format>
+     * ```
+     *
+     * ### Constructed bundle data:
+     *
+     * ```
+     * {
+     *   "sentence" : [
+     *     {
+     *       "0": "You ({3}) gave no gifts.",
+     *       "1": {
+     *         "male": "You ({3}) gave him ({4}) {5}.",
+     *         "female": "You ({3}) gave her ({4}) {5}.",
+     *         "other": "You ({3}) gave them ({4}) {5}."
+     *       },
+     *       "one": {
+     *         "male": 
+     *         "You ({3}) gave him ({4}) and one other {5}.",
+     *         "female": 
+     *         "You ({3}) gave her ({4}) and one other {5}.",
+     *         "other": 
+     *         "You ({3}) gave them ({4}) and one other {5}."
+     *       },
+     *       "other": 
+     *       "You ({3}) gave them ({4}) and {1} others gifts."
+     *     },
+     *     "{{recipients.length - 1}}",
+     *     "{{recipients.0.gender}}",
+     *     "{{sender.name}}",
+     *     "{{recipients.0.name}}",
+     *     "a gift"
+     *   ]
+     * }
+     * ```
+     *
+     * @param {Object} node Target element node.
+     * @param {string} path Path to the target node.
+     * @param {Object} bundle Default bundle.
+     * @param {Number} index Index in the siblings of the target node excluding whitespace nodes.
+     */
+    _traverseTemplateTree: function (node, path, bundle, index) {
+      var i;
+      var whiteSpaceElements = 0;
+      var isWhiteSpace = false;
+      var text;
+      var span;
+      var name = node.nodeName.toLowerCase();
+      var id = node.getAttribute ? 
+                 (node.getAttribute('text-id') || 
+                  node.getAttribute('id')) : null;
+      var messageId;
+      path.push(id ? '#' + id : name + (index > 0 ? '_' + index : ''));
+      //console.log(path.join(':'));
+      switch (node.nodeType) {
+      case node.ELEMENT_NODE:
+        switch (name) {
+        case 'style':
+        case 'script':
+        case 'meta':
+          // skip
+          break;
+        case 'i18n-format':
+          // pick up element attributes
+          this._traverseAttributes(node, path, bundle);
+          // generate message id
+          messageId = this._generateMessageId(path, id);
+          if (!node.hasAttribute('lang')) {
+            node.setAttribute('lang', '{{effectiveLang}}');
+          }
+          text = Array.prototype.filter.call(node.childNodes, function (child) {
+            return child.nodeType === child.ELEMENT_NODE;
+          }).map(function (param, n) {
+            var value = param.textContent;
+            var parsedValue = value.match(/^({{)(.*)(}})$/) || 
+                              value.match(/^(\[\[)(.*)(\]\])$/);
+            if (n === 0) {
+              // template element
+              if (param.tagName.toLowerCase() === 'json-data') {
+                if (parsedValue) {
+                  var parsedValue2 = value.match(/^({{)(serialize\(.*\))(}})$/) || 
+                                     value.match(/^(\[\[)(serialize\(.*\))(\]\])$/);
+                  if (!parsedValue2) {
+                    // convert to {{serialize(id)}}
+                    parsedValue.shift();
+                    parsedValue.splice(1, 0, 'serialize(');
+                    parsedValue.splice(3, 0, ')');
+                    param.textContent = parsedValue.join('');
+                  }
+                }
+                else {
+                  value = JSON.parse(value);
+                  param.textContent = '{{serialize(text.' + messageId + '.' + n + ')}}';
+                }
+              }
+              else {
+                param.textContent = '{{text.' + messageId + '.' + n + '}}';
+              }
+            }
+            else {
+              // param element
+              // TODO: handle localization of param nodes and attributes
+              if (!param.hasAttribute('param')) {
+                param.setAttribute('param', n);
+              }
+              if (param.tagName.toLowerCase() === 'i18n-number') {
+                if (!param.hasAttribute('lang')) {
+                  param.setAttribute('lang', '{{effectiveLang}}');
+                }
+                var offset = param.getAttribute('offset');
+                if (offset) {
+                  offset = ' - ' + offset;
+                }
+                else {
+                  offset = '';
+                }
+                if (parsedValue) {
+                  // convert to {{path - offset}}
+                  parsedValue.shift();
+                  parsedValue.splice(2, 0, offset);
+                  value = parsedValue.join('');
+                }
+                else {
+                  param.textContent = '{{text.' + messageId + '.' + n + '}}';
+                }
+              }
+              else {
+                if (!parsedValue) {
+                  param.textContent = '{{text.' + messageId + '.' + n + '}}';
+                }
+              }
+            }
+            return value;
+          }, this);
+          console.log(messageId + ' = ' + text);
+          this._setBundleValue(bundle, messageId, text);
+          break;
+        case 'template':
+          // traverse into its content
+          //console.log(path.join(':') + ':' + node.content.nodeName + ':' + 0);
+          this._traverseTemplateTree(node.content, path, bundle, 0);
+          break;
+        default:
+          // element node
+          if (name === 'i18n-number' ||
+              name === 'i18n-datetime') {
+            if (!node.hasAttribute('lang')) {
+              node.setAttribute('lang', '{{effectiveLang}}');
+            }
+          }
+          // pick up element attributes
+          this._traverseAttributes(node, path, bundle);
+          if (node.childElementCount === 0) {
+            if (node.textContent) { // use textContent for Firefox compatibility
+              text = node.textContent;
+              if (text.length === 0 || text.match(/^\s*$/g)) {
+                // skip empty or whitespace node
+              }
+              else if (text.match(/^{{.*}}$/) || text.match(/^\[\[.*\]\]$/)) {
+                // skip annotation node
+                // TODO: compound bindings support
+              }
+              else {
+                // a text message found
+                // generate message id
+                messageId = this._generateMessageId(path, id);
+                // store the text message
+                text = text.trim();
+                if (name === 'json-data') {
+                  this._setBundleValue(bundle, messageId, JSON.parse(text));
+                }
+                else {
+                  this._setBundleValue(bundle, messageId, text);
+                }
+                // replace textContent with annotation
+                node.textContent = '{{text.' + messageId + '}}';
+                if (!id) {
+                  //node.id = messageId;
+                  //console.warn('add missing node id as ' + messageId + ' for ' + text);
+                }
+                console.log(messageId + ' = ' + text);
+              }
+            }
+            else {
+              // skip
+            }
+          } 
+          else {
+            // has children
+            // check if i18n-format is applicable
+            var childStatus = Array.prototype.map.call(
+              node.childNodes, function (child) {
+                return {
+                  hasText: child.nodeType === child.TEXT_NODE && 
+                           child.textContent.length > 0 && 
+                           !child.textContent.match(/^\s*$/g), 
+                  hasTextChild: child.nodeType === child.ELEMENT_NODE &&
+                                child.childElementCount === 0, // including <br>
+                  hasGrandChildren: child.nodeType === child.ELEMENT_NODE &&
+                                    Array.prototype.map.call(
+                                      child.childNodes, 
+                                      function (grandChild) {
+                                        return grandChild.nodeType !== grandChild.TEXT_NODE;
+                                      }
+                                    ).reduce(function (prev, current) {
+                                      return prev || current;
+                                    }, false)
+                };
+              }).reduce(function (prev, current) { 
+                return {
+                  hasText: prev.hasText || current.hasText,
+                  hasTextChild: prev.hasTextChild || current.hasTextChild,
+                  hasGrandChildren: prev.hasGrandChildren || current.hasGrandChildren
+                };
+              }, { 
+                hasText: false, 
+                hasTextChild: false,
+                hasGrandChildren: false
+              });
+            if ((childStatus.hasText || node.hasAttribute('text-id')) && 
+                childStatus.hasTextChild && 
+                !childStatus.hasGrandChildren) {
+              // apply i18n-format
+              /*
+                    <i18n-format>
+                      <span>{{text.simpleChartDesc.0}}</span>
+                      <code param="1">{{text.simpleChartDesc.1}}</code>
+                      <a param="2" href="link">{{text.simpleChartDesc.2}}</a>
+                      <a param="3" href="link2">{{text.simpleChartDesc.3}}</a>
+                    </i18n-format>
+              */
+              var n = 0;
+              messageId = this._generateMessageId(path, id);
+              var templateTextParams = Array.prototype.map.call(
+                node.childNodes, function (child) {
+                  return {
+                    node: child,
+                    type: child.nodeType,
+                    text: child.nodeType === child.TEXT_NODE ? 
+                            child.textContent : null,
+                    childTextNode: child.nodeType === child.ELEMENT_NODE &&
+                                   child.childNodes.length > 0
+                  };
+                }).reduce(function (prev, current) {
+                  if (current.text) {
+                    prev.text[0] += current.text;
+                  }
+                  if (current.type === current.node.ELEMENT_NODE) {
+                    n++;
+                    prev.text[0] += '{' + n + '}';
+                    path.push(n);
+                    this._traverseAttributes(current.node, path, bundle);
+                    path.pop();
+                    if (current.childTextNode) {
+                      var textContent = current.node.textContent;
+                      if (textContent.length === 0) {
+                        // tag without textContent
+                        prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
+                        current.node.textContent = '';
+                      }
+                      else if (textContent.match(/^\s*$/g)) {
+                        // tag with whitespace textContent
+                        prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
+                        current.node.textContent = ' ';
+                      }
+                      else if (textContent.match(/^{{.*}}$/) || textContent.match(/^\[\[.*\]\]$/)) {
+                        // tag with annotation
+                        prev.text.push(textContent);
+                        // textContent is untouched
+                      }
+                      else {
+                        prev.text.push(current.node.textContent.trim());
+                        current.node.textContent = '{{text.' + messageId + '.' + n + '}}';
+                      }
+                    }
+                    else {
+                      prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
+                    }
+                    current.node.setAttribute('param', n.toString());
+                    prev.params.push(current.node);
+                  }
+                  return prev;
+                }.bind(this), { text: [ '' ], params: [ '{{text.' + messageId + '.0}}' ] });
+              var templateText = document.createElement('i18n-format');
+              templateText.setAttribute('lang', '{{effectiveLang}}');
+              span = document.createElement('span');
+              // span.innerText does not set an effective value in Firefox
+              span.textContent = templateTextParams.params.shift();
+              templateText.appendChild(span);
+              Array.prototype.forEach.call(templateTextParams.params,
+                function (param) {
+                  templateText.appendChild(param);
+                }
+              );
+              // store the text message
+              templateTextParams.text[0] = templateTextParams.text[0].trim();
+              this._setBundleValue(bundle, messageId, templateTextParams.text);
+              // insert i18n-format
+              node.innerHTML = '';
+              Polymer.dom(node).appendChild(templateText);
+              if (!id) {
+                //node.id = messageId;
+                //console.warn('add missing node id as ' + messageId + ' for ' + templateTextParams.text[0]);
+              }
+              console.log(messageId + ' = ' + templateTextParams.text);
+            }
+            else {
+              // traverse childNodes
+              for (i = 0; i < node.childNodes.length; i++) {
+                //console.log(path.join(':') + ':' + node.childNodes[i].nodeName + ':' + (i - whiteSpaceElements) + ' i = ' + i + ' whiteSpaceElements = ' + whiteSpaceElements);
+                if (this._traverseTemplateTree(node.childNodes[i], path, bundle, i - whiteSpaceElements)) {
+                  whiteSpaceElements++;
+                }
+              }
+            }
+          }
+          break;
+        }
+        break;
+      case node.TEXT_NODE:
+        // text node
+        text = node.textContent;
+        if (text.length === 0 || text.match(/^\s*$/g)) {
+          // skip empty or whitespace node
+          isWhiteSpace = true;
+        }
+        else if (text.match(/^{{.*}}$/) || text.match(/^\[\[.*\]\]$/)) {
+          // skip annotation node
+        }
+        else {
+          var parent = node.parentNode;
+          span = document.createElement('span');
+
+          // replace text node with span
+          Polymer.dom(parent).insertBefore(span, node);
+          Polymer.dom(parent).removeChild(node);
+
+          // update path
+          path[path.length - 1] = path[path.length - 1].replace('#text', 'span');
+
+          // generate message id
+          messageId = this._generateMessageId(path, id);
+          // store the text message
+          text = text.trim();
+          this._setBundleValue(bundle, messageId, text);
+          // replace textContent with annotation
+          span.textContent = '{{text.' + messageId + '}}';
+          if (!id) {
+            //span.id = messageId;
+            //console.warn('add missing span with id as ' + messageId + ' for ' + text);
+          }
+          console.log(messageId + ' = ' + text);
+        }
+        break;
+      case node.DOCUMENT_NODE:
+      case node.DOCUMENT_FRAGMENT_NODE:
+        // traverse childNodes
+        for (i = 0; i < node.childNodes.length; i++) {
+          //console.log(path.join(':') + ':' + node.childNodes[i].nodeName + ':' + (i - whiteSpaceElements) + ' i = ' + i + ' whiteSpaceElements = ' + whiteSpaceElements);
+          if (this._traverseTemplateTree(node.childNodes[i], path, bundle, i - whiteSpaceElements)) {
+            whiteSpaceElements++;
+          }
+        }
+        break;
+      default:
+        isWhiteSpace = true;
+        // comment node, etc.
+        break;
+      }
+      path.pop();
+      return isWhiteSpace;
+    },
+
+    /**
+     * Add the value to the target default bundle with the specified message Id 
+     * 
+     * @param {Object} bundle Default bundle.
+     * @param {string} messageId ID string of the value.
+     * @param {Object} value Value of the text message. Normally a string.
+     */
+    _setBundleValue: function (bundle, messageId, value) {
+      var messageIdPath = messageId.split('.');
+      bundle.model = bundle.model || {};
+      if (messageIdPath.length === 1) {
+        bundle[messageId] = value;
+      }
+      else {
+        var cursor = bundle;
+        for (var i = 0; i < messageIdPath.length; i++) {
+          if (i < messageIdPath.length - 1) {
+            cursor[messageIdPath[i]] = cursor[messageIdPath[i]] || {};
+            cursor = cursor[messageIdPath[i]];
+          }
+          else {
+            cursor[messageIdPath[i]] = value;
+          }
+        }
+      }
+    },
+
+    /**
+     * Generate a message ID from the specified path and id.
+     * 
+     * ### TODO: 
+     *
+     * - Shorten or optimize ids
+     *
+     * @param {Array} path List of ascestor elements of the current node in traversal.
+     * @param {id} id Value of `id` or `text-id` attribute of the current node.
+     */
+    _generateMessageId: function (path, id) {
+      var messageId;
+      if (!id || id.length === 0) {
+        for (var i = 1; i < path.length; i++) {
+          if (path[i][0] === '#') {
+            if (path[i] !== '#document-fragment') {
+              messageId = path[i].substr(1);
+            }
+          }
+          else {
+            if (messageId) {
+              messageId += ':' + path[i];
+            }
+            else {
+              messageId = path[i];
+            }
+          }
+        }
+      }
+      else {
+        messageId = id;
+      }
+      return messageId;
+    },
+
+    /**
+     * Merge `this.defaultText` into the target default bundle.
+     * 
+     * ### TODO: 
+     *
+     * - Need more research on the effective usage of this feature.
+     *
+     * @param {Object} bundle Default bundle.
+     */
+    _mergeDefaultText: function (bundle) {
+      if (this.defaultText) {
+        this._deepMap(bundle, this.defaultText, function (text) { return text; });
+      }
+    },
+
+    /**
+     * Return the first non-null argument.
+     *
+     * Utility method for use in annotations.
+     *
+     * ### Example Usage:
+     * ```
+     *   <input is="iron-input" class="flex"
+     *     type="search" id="query" bind-value="{{query}}"
+     *     autocomplete="off"
+     *     placeholder="{{or(placeholder,text.search)}}">
+     * ```
+     *
+     * @param {*} arguments List of arguments.
+     */
+    or: function () {
+      var result = arguments[0];
+      var i = 1;
+      while (!result && i < arguments.length) {
+        result = arguments[i++];
+      }
+      return result;
+    },
+
+    // Lifecycle callbacks
+
+    /**
+     * Lifecycle callback before registration of the custom element.
+     *
+     * The default bundle is constructed via traversal of the element's template at this timing per registration.
+     *
+     * ### Notes: 
+     *
+     * - For `i18n-dom-bind` elements, bundle construction is put off until `ready` lifecycle callback.
+     * - As called twice per custom element registration, the method skips bundle construction at the second call.
+     */
+    beforeRegister: function () {
+      if (this.is !== 'i18n-dom-bind') {
+        if (!this._templateLocalizable) {
+          this._templateLocalizable = this._constructDefaultBundle();
+        }
+      }
+    },
+
+
+    /**
+     * Lifecycle callback at registration of the custom element.
+     *
+     * this._fetchStatus is initialized per registration.
+     */
+    registered: function () {
+      this._fetchStatus = deepcopy({ // per custom element
+        fetchingInstance: null,
+        ajax: null,
+        ajaxLang: null,
+        lastLang: null,
+        fallbackLanguageList: null,
+        targetLang: null, 
+        lastResponse: {},
+        rawResponses: {}
+      });
+    },
+
+    /**
+     * Lifecycle callback when the template children are ready.
+     */
+    ready: function () {
+      if (this.is === 'i18n-dom-bind') {
+        if (!this._templateLocalizable) {
+          this._templateLocalizable = this._constructDefaultBundle();
+        }
+        if (!this._fetchStatus) {
+          this._fetchStatus = deepcopy({ // per custom element
+            fetchingInstance: null,
+            ajax: null,
+            ajaxLang: null,
+            lastLang: null,
+            fallbackLanguageList: null,
+            targetLang: null, 
+            lastResponse: {},
+            rawResponses: {}
+          });
+        }
+        this._onDomChangeBindThis = this._onDomChange.bind(this);
+        this.addEventListener('dom-change', this._onDomChangeBindThis);
+      }
+      else {
+        // model per instance
+        this.model = deepcopy(this.text.model);
+      }
+    },
+
+    /**
+     * attached lifecycle callback.
+     */
+    attached: function () {
+      if (this.observeHtmlLang) {
+        this.lang = html.lang;
+        // TODO: this call is redundant
+        this._observeHtmlLangChanged(true);
+      }
+    },
+
+    /**
+     * Handle `dom-change` event for `i18n-dom-bind`
+     */
+    _onDomChange: function () {
+      this.removeEventListener('dom-change', this._onDomChangeBindThis);
+      this.model = deepcopy(this.text.model);
+      if (this.observeHtmlLang) {
+        this.lang = html.lang;
+        this._observeHtmlLangChanged(true);
+      }
+    },
+
+    /**
+     * detached lifecycle callback
+     */
+    detached: function () {
+      if (this.observeHtmlLang) {
+        this._observeHtmlLangChanged(false);
+      }
+    }
+  };
+
+  /**
+   * `<template is="i18n-dom-bind">` element extends `dom-bind` template element with `I18nBehavior`
+   *
+   * @group I18nBehavior
+   * @element i18n-dom-bind
+   */
+  var i18nDomBind = deepcopy(Object.getPrototypeOf(document.createElement('template', 'dom-bind')));
+  i18nDomBind.is = 'i18n-dom-bind';
+  i18nDomBind.behaviors = [ BehaviorsStore.I18nBehavior ];
+  var _Polymer = Polymer;
+  _Polymer(i18nDomBind);
+})(document);
+</script>
+
+
+
 <script>!function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.page=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 (function (process){
   /* globals require, module */
@@ -16551,7 +20428,7 @@ module.exports = Array.isArray || function (arr) {
   </template>
 </dom-module>
 <dom-module id="my-greeting" assetpath="my-greeting/">
-  <template>
+  <template localizable-text="embedded">
     <style include="shared-styles">
       :host {
         display: block;
@@ -16564,10 +20441,19 @@ module.exports = Array.isArray || function (arr) {
     </style>
 
     <h2 class="page-title">{{greeting}}</h2>
-    <span>Update text to change the greeting.</span>
+    <span>{{text.span_2}}</span>
     
     <input value="{{greeting::input}}">
-  </template>
+    <template>
+      <span id="welcome">{{text.welcome}}</span>
+    </template>
+  
+<template id="localizable-text">
+<json-data>
+{"meta":{},"model":{},"span_2":"Update text to change the greeting.","welcome":"Welcome!"}
+</json-data>
+</template>
+</template>
 
   <script>
     (function() {
@@ -16576,19 +20462,30 @@ module.exports = Array.isArray || function (arr) {
       Polymer({
         is: 'my-greeting',
 
+        behaviors: [
+          BehaviorsStore.I18nBehavior
+        ],
+
         properties: {
           greeting: {
             type: String,
-            value: 'Welcome!',
             notify: true
           }
+        },
+
+        listeners: {
+          'lang-updated': 'langUpdated'
+        },
+
+        langUpdated: function () {
+          this.greeting = this.text.welcome;
         }
       });
     })();
   </script>
 </dom-module>
 <dom-module id="my-list" assetpath="my-list/">
-  <template>
+  <template localizable-text="embedded">
     <style>
       :host {
         display: block;
@@ -16600,11 +20497,20 @@ module.exports = Array.isArray || function (arr) {
     </style>
 
     <ul>
-      <template is="dom-repeat" items="{{items}}">
+      <template is="dom-repeat" items="{{text.items}}">
         <li><span>{{item}}</span></li>
       </template>
     </ul>
-  </template>
+    <template>
+      <json-data id="items">{{text.items}}</json-data>
+    </template>
+  
+<template id="localizable-text">
+<json-data>
+{"meta":{},"model":{},"items":["Responsive Web App boilerplate","Iron Elements and Paper Elements","End-to-end Build Tooling (including Vulcanize)","Unit testing with Web Component Tester","Routing with Page.js","Offline support with the Platinum Service Worker Elements"]}
+</json-data>
+</template>
+</template>
 
   <script>
     (function() {
@@ -16613,23 +20519,9 @@ module.exports = Array.isArray || function (arr) {
       Polymer({
         is: 'my-list',
 
-        properties: {
-          items: {
-            type: Array,
-            notify: true,
-          }
-        },
-
-        ready: function() {
-          this.items = [
-            'Responsive Web App boilerplate',
-            'Iron Elements and Paper Elements',
-            'End-to-end Build Tooling (including Vulcanize)',
-            'Unit testing with Web Component Tester',
-            'Routing with Page.js',
-            'Offline support with the Platinum Service Worker Elements'
-          ];
-        }
+        behaviors: [
+          BehaviorsStore.I18nBehavior
+        ]
       });
     })();
   </script>
