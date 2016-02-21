@@ -18558,8 +18558,22 @@ Polymer({
           // set up ajax client
           this._fetchStatus.ajax = Polymer.Base.create('iron-ajax');
           this._fetchStatus.ajax.handleAs = 'json';
-          this._fetchStatus.ajax.addEventListener('response', this._handleResponse.bind(this));
-          this._fetchStatus.ajax.addEventListener('error', this._handleError.bind(this));
+          this._fetchStatus._handleResponseBindFetchingInstance = this._handleResponse.bind(this);
+          this._fetchStatus._handleErrorBindFetchingInstance = this._handleError.bind(this);
+          this._fetchStatus.ajax.addEventListener('response', this._fetchStatus._handleResponseBindFetchingInstance);
+          this._fetchStatus.ajax.addEventListener('error', this._fetchStatus._handleErrorBindFetchingInstance);
+        }
+        else {
+          if (this._fetchStatus._handleResponseBindFetchingInstance) {
+            this._fetchStatus.ajax.removeEventListener('response', this._fetchStatus._handleResponseBindFetchingInstance);
+          }
+          if (this._fetchStatus._handleErrorBindFetchingInstance) {
+            this._fetchStatus.ajax.removeEventListener('error', this._fetchStatus._handleErrorBindFetchingInstance);
+          }
+          this._fetchStatus._handleResponseBindFetchingInstance = this._handleResponse.bind(this);
+          this._fetchStatus._handleErrorBindFetchingInstance = this._handleError.bind(this);
+          this._fetchStatus.ajax.addEventListener('response', this._fetchStatus._handleResponseBindFetchingInstance);
+          this._fetchStatus.ajax.addEventListener('error', this._fetchStatus._handleErrorBindFetchingInstance);
         }
         // TODO: app global bundles have to be handled
         var url;
@@ -18669,7 +18683,7 @@ Polymer({
         }
         else {
           this._fetchStatus.error = event.detail.error;
-          console.error(this._fetchStatus.error);
+          //console.log(this._fetchStatus.error);
           // falls back to default
           this.lang = '';
         }
@@ -19973,9 +19987,20 @@ Polymer({
    * @group I18nBehavior
    * @element i18n-dom-bind
    */
-  var i18nDomBind = deepcopy(Object.getPrototypeOf(document.createElement('template', 'dom-bind')));
+  var i18nDomBind = {};
+  var domBind = document.createElement('template', 'dom-bind');
+  var domBindProto = Object.getPrototypeOf(domBind);
+  if (typeof domBindProto.render !== 'function') {
+    domBindProto = domBind.__proto__; // fallback for IE10
+  }
+  Polymer.Base.extend(i18nDomBind, domBindProto);
   i18nDomBind.is = 'i18n-dom-bind';
-  i18nDomBind.behaviors = [ BehaviorsStore.I18nBehavior ];
+  if (i18nDomBind.behaviors) {
+    i18nDomBind.behaviors.push(BehavirosStore.I18nBehavior);
+  }
+  else {
+    i18nDomBind.behaviors = [ BehaviorsStore.I18nBehavior ];
+  }
   var _Polymer = Polymer;
   _Polymer(i18nDomBind);
 })(document);
@@ -21438,12 +21463,7 @@ module.exports = Array.isArray || function (arr) {
   
 <template id="localizable-text">
 <json-data>
-{
-  "meta": {},
-  "model": {},
-  "span_2": "Update text to change the greeting.",
-  "welcome": "Welcome!"
-}
+{"meta":{},"model":{},"span_2":"Update text to change the greeting.","welcome":"Welcome!"}
 </json-data>
 </template>
 </template>
@@ -21500,18 +21520,7 @@ module.exports = Array.isArray || function (arr) {
   
 <template id="localizable-text">
 <json-data>
-{
-  "meta": {},
-  "model": {},
-  "items": [
-    "Responsive Web App boilerplate",
-    "Iron Elements and Paper Elements",
-    "End-to-end Build Tooling (including Vulcanize)",
-    "Unit testing with Web Component Tester",
-    "Routing with Page.js",
-    "Offline support with the Platinum Service Worker Elements"
-  ]
-}
+{"meta":{},"model":{},"items":["Responsive Web App boilerplate","Iron Elements and Paper Elements","End-to-end Build Tooling (including Vulcanize)","Unit testing with Web Component Tester","Routing with Page.js","Offline support with the Platinum Service Worker Elements"]}
 </json-data>
 </template>
 </template>
