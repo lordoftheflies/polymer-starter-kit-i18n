@@ -7673,7 +7673,7 @@ this.fire('dom-change');
     };
 
     --layout-around-justified: {
-      -ms-flex-pack: around;
+      -ms-flex-pack: distribute;
       -webkit-justify-content: space-around;
       justify-content: space-around;
     };
@@ -8670,11 +8670,13 @@ this.fire('dom-change');
    * size or hidden state of their children) and "resizables" (elements that need to be
    * notified when they are resized or un-hidden by their parents in order to take
    * action on their new measurements).
+   * 
    * Elements that perform measurement should add the `IronResizableBehavior` behavior to
    * their element definition and listen for the `iron-resize` event on themselves.
    * This event will be fired when they become showing after having been hidden,
    * when they are resized explicitly by another resizable, or when the window has been
    * resized.
+   * 
    * Note, the `iron-resize` event is non-bubbling.
    *
    * @polymerBehavior Polymer.IronResizableBehavior
@@ -8903,16 +8905,19 @@ this.fire('dom-change');
      */
     setItemSelected: function(item, isSelected) {
       if (item != null) {
-        if (isSelected) {
-          this.selection.push(item);
-        } else {
-          var i = this.selection.indexOf(item);
-          if (i >= 0) {
-            this.selection.splice(i, 1);
+        if (isSelected !== this.isSelected(item)) {
+          // proceed to update selection only if requested state differs from current
+          if (isSelected) {
+            this.selection.push(item);
+          } else {
+            var i = this.selection.indexOf(item);
+            if (i >= 0) {
+              this.selection.splice(i, 1);
+            }
           }
-        }
-        if (this.selectCallback) {
-          this.selectCallback(item, isSelected);
+          if (this.selectCallback) {
+            this.selectCallback(item, isSelected);
+          }
         }
       }
     },
@@ -9073,7 +9078,8 @@ this.fire('dom-change');
     },
 
     observers: [
-      '_updateSelected(attrForSelected, selected)'
+      '_updateAttrForSelected(attrForSelected)',
+      '_updateSelected(selected)'
     ],
 
     created: function() {
@@ -9085,7 +9091,7 @@ this.fire('dom-change');
       this._observer = this._observeItems(this);
       this._updateItems();
       if (!this._shouldUpdateSelection) {
-        this._updateSelected(this.attrForSelected,this.selected)
+        this._updateSelected();
       }
       this._addListener(this.activateEvent);
     },
@@ -9178,6 +9184,12 @@ this.fire('dom-change');
       this._setItems(nodes);
     },
 
+    _updateAttrForSelected: function() {
+      if (this._shouldUpdateSelection) {
+        this.selected = this._indexToValue(this.indexOf(this.selectedItem));        
+      }
+    },
+
     _updateSelected: function() {
       this._selectSelected(this.selected);
     },
@@ -9247,7 +9259,7 @@ this.fire('dom-change');
         }
 
         // Let other interested parties know about the change so that
-        // we don't have to recreate mutation observers everywher.
+        // we don't have to recreate mutation observers everywhere.
         this.fire('iron-items-changed', mutations, {
           bubbles: false,
           cancelable: false
@@ -9366,7 +9378,7 @@ this.fire('dom-change');
     },
 
     observers: [
-      '_updateSelected(attrForSelected, selectedValues)'
+      '_updateSelected(selectedValues)'
     ],
 
     /**
@@ -9397,6 +9409,18 @@ this.fire('dom-change');
         (this.selectedValues != null && this.selectedValues.length);
     },
 
+    _updateAttrForSelected: function() {
+      if (!this.multi) {
+        Polymer.IronSelectableBehavior._updateAttrForSelected.apply(this);
+      } else if (this._shouldUpdateSelection) {
+        this.selectedValues = this.selectedItems.map(function(selectedItem) {
+          return this._indexToValue(this.indexOf(selectedItem));        
+        }, this).filter(function(unfilteredValue) {
+          return unfilteredValue != null;
+        }, this);
+      }
+    },
+
     _updateSelected: function() {
       if (this.multi) {
         this._selectMulti(this.selectedValues);
@@ -9406,11 +9430,16 @@ this.fire('dom-change');
     },
 
     _selectMulti: function(values) {
-      this._selection.clear();
       if (values) {
-        for (var i = 0; i < values.length; i++) {
-          this._selection.setItemSelected(this._valueToItem(values[i]), true);
+        var selectedItems = this._valuesToItems(values);
+        // clear all but the current selected items
+        this._selection.clear(selectedItems);
+        // select only those not selected yet
+        for (var i = 0; i < selectedItems.length; i++) {
+          this._selection.setItemSelected(selectedItems[i], true);
         }
+      } else {
+        this._selection.clear();
       }
     },
 
@@ -9433,6 +9462,12 @@ this.fire('dom-change');
         this.splice('selectedValues',i,1);
       }
       this._selection.setItemSelected(this._valueToItem(value), unselected);
+    },
+
+    _valuesToItems: function(values) {
+      return (values == null) ? null : values.map(function(value) {
+        return this._valueToItem(value);
+      }, this);
     }
   };
 
@@ -10798,6 +10833,7 @@ this.fire('dom-change');
         this._oldTabIndex = this.tabIndex;
         this.focused = false;
         this.tabIndex = -1;
+        this.blur();
       } else if (this._oldTabIndex !== undefined) {
         this.tabIndex = this._oldTabIndex;
       }
@@ -12832,6 +12868,13 @@ this.fire('dom-change');
         return;
       }
 
+      // Do not focus the selected tab if the deepest target is part of the
+      // menu element's local DOM and is focusable.
+      var rootTarget = Polymer.dom(event).rootTarget;
+      if (rootTarget !== this && typeof rootTarget.tabIndex !== "undefined" && !this.isLightDescendant(rootTarget)) {
+        return;
+      }
+
       this.blur();
 
       // clear the cached focus item
@@ -12859,6 +12902,7 @@ this.fire('dom-change');
     _onUpKey: function(event) {
       // up and down arrows moves the focus
       this._focusPrevious();
+      event.detail.keyboardEvent.preventDefault();
     },
 
     /**
@@ -12868,6 +12912,7 @@ this.fire('dom-change');
      */
     _onDownKey: function(event) {
       this._focusNext();
+      event.detail.keyboardEvent.preventDefault();
     },
 
     /**
@@ -13314,14 +13359,13 @@ this.fire('dom-change');
      * @param {boolean} smooth true if the scroll position should be smoothly adjusted.
      */
     condense: function(smooth) {
-      var ctx = Polymer.PaperScrollHeaderPanel;
       if (this.condenses && !this.fixed && !this.noReveal) {
         switch (this.headerState) {
-          case ctx.HEADER_STATE_HIDDEN:
+          case 1:
             this.scroll(this.scroller.scrollTop - (this._headerMaxDelta - this._headerMargin), smooth);
           break;
-          case ctx.HEADER_STATE_EXPANDED:
-          case ctx.HEADER_STATE_INTERPOLATED:
+          case 0:
+          case 3:
             this.scroll(this._headerMargin, smooth);
           break;
         }
@@ -13367,16 +13411,16 @@ this.fire('dom-change');
       s.top = this.fixed ? this.headerHeight + 'px' : '';
 
       if (this.fixed) {
-        this._setHeaderState(this.HEADER_STATE_EXPANDED);
+        this._setHeaderState(0);
         this._transformHeader(null);
       } else {
         switch (this.headerState) {
-          case this.HEADER_STATE_HIDDEN:
+          case 1:
             this._transformHeader(this._headerMaxDelta);
-            break;
-          case this.HEADER_STATE_CONDENSED:
+          break;
+          case 2:
             this._transformHeader(this._headerMargin);
-            break;
+          break;
         }
       }
     },
@@ -13440,7 +13484,6 @@ this.fire('dom-change');
     },
 
     _updateScrollState: function(scrollTop) {
-      var ctx = Polymer.PaperScrollHeaderPanel;
       var deltaScrollTop = scrollTop - this._prevScrollTop;
       var y = Math.max(0, (this.noReveal) ? scrollTop : this._y + deltaScrollTop);
 
@@ -13448,19 +13491,19 @@ this.fire('dom-change');
         y = this._headerMaxDelta;
 
         if (this.keepCondensedHeader) {
-          this._setHeaderState(ctx.HEADER_STATE_CONDENSED);
+          this._setHeaderState(2);
         } else {
-          this._setHeaderState(ctx.HEADER_STATE_HIDDEN);
+          this._setHeaderState(1);
         }
       } else if (this.condenses && scrollTop >= this._headerMargin) {
         y = Math.max(y, this._headerMargin);
-        this._setHeaderState(ctx.HEADER_STATE_CONDENSED);
+        this._setHeaderState(2);
 
       } else if (y === 0) {
-        this._setHeaderState(ctx.HEADER_STATE_EXPANDED);
+        this._setHeaderState(0);
 
       } else {
-        this._setHeaderState(ctx.HEADER_STATE_INTERPOLATED);
+        this._setHeaderState(3);
       }
 
       if (!this.fixed && y !== this._y) {
@@ -13983,6 +14026,16 @@ CSS properties               | Action
     this._minimumZ = 101;
 
     this._backdrops = [];
+
+    this._backdropElement = null;
+    Object.defineProperty(this, 'backdropElement', {
+      get: function() {
+        if (!this._backdropElement) {
+          this._backdropElement = document.createElement('iron-overlay-backdrop');
+        }
+        return this._backdropElement;
+      }.bind(this)
+    });
   }
 
   Polymer.IronOverlayManagerClass.prototype._applyOverlayZ = function(overlay, aboveZ) {
@@ -14063,15 +14116,6 @@ CSS properties               | Action
       this._backdrops.splice(index, 1);
     }
   };
-
-  Object.defineProperty(Polymer.IronOverlayManagerClass.prototype, "backdropElement", {
-    get: function() {
-      if (!this._backdropElement) {
-        this._backdropElement = document.createElement('iron-overlay-backdrop');
-      }
-      return this._backdropElement;
-    }
-  });
 
   Polymer.IronOverlayManagerClass.prototype.getBackdrops = function() {
     return this._backdrops;
@@ -14404,9 +14448,12 @@ context. You should place this element as a child of `<body>` whenever possible.
       if (this._callOpenedWhenReady) {
         this._openedChanged();
       }
+      this._observer = Polymer.dom(this).observeNodes(this._onNodesChange);
     },
 
     detached: function() {
+      Polymer.dom(this).unobserveNodes(this._observer);
+      this._observer = null;
       this.opened = false;
       this._manager.trackBackdrop(this);
       this._manager.removeOverlay(this);
@@ -14438,9 +14485,10 @@ context. You should place this element as a child of `<body>` whenever possible.
 
     /**
      * Cancels the overlay.
+     * @param {?Event} event The original event
      */
-    cancel: function() {
-      var cancelEvent = this.fire('iron-overlay-canceled', undefined, {cancelable: true});
+    cancel: function(event) {
+      var cancelEvent = this.fire('iron-overlay-canceled', event, {cancelable: true});
       if (cancelEvent.defaultPrevented) {
         return;
       }
@@ -14463,7 +14511,6 @@ context. You should place this element as a child of `<body>` whenever possible.
         this.removeAttribute('aria-hidden');
       } else {
         this.setAttribute('aria-hidden', 'true');
-        Polymer.dom(this).unobserveNodes(this._observer);
       }
 
       // wait to call after ready only if we're initially open
@@ -14551,14 +14598,23 @@ context. You should place this element as a child of `<body>` whenever possible.
 
     // tasks which must occur before opening; e.g. making the element visible
     _prepareRenderOpened: function() {
+
       this._manager.addOverlay(this);
 
+      // Needed to calculate the size of the overlay so that transitions on its size
+      // will have the correct starting points.
       this._preparePositioning();
       this.fit();
       this._finishPositioning();
 
       if (this.withBackdrop) {
         this.backdropElement.prepare();
+      }
+
+      // Safari will apply the focus to the autofocus element when displayed for the first time,
+      // so we blur it. Later, _applyFocus will set the focus if necessary.
+      if (this.noAutoFocus && document.activeElement === this._focusNode) {
+        this._focusNode.blur();
       }
     },
 
@@ -14579,23 +14635,24 @@ context. You should place this element as a child of `<body>` whenever possible.
     },
 
     _finishRenderOpened: function() {
-      // focus the child node with [autofocus]
+      // This ensures the overlay is visible before we set the focus
+      // (by calling _onIronResize -> refit).
+      this.notifyResize();
+      // Focus the child node with [autofocus]
       this._applyFocus();
 
-      this._observer = Polymer.dom(this).observeNodes(this.notifyResize);
       this.fire('iron-overlay-opened');
     },
 
     _finishRenderClosed: function() {
-      // hide the overlay and remove the backdrop
+      // Hide the overlay and remove the backdrop.
       this.resetFit();
       this.style.display = 'none';
       this._manager.removeOverlay(this);
 
-      this._focusedChild = null;
       this._applyFocus();
-
       this.notifyResize();
+
       this.fire('iron-overlay-closed', this.closingReason);
     },
 
@@ -14608,8 +14665,9 @@ context. You should place this element as a child of `<body>` whenever possible.
     _finishPositioning: function() {
       this.style.display = 'none';
       this.style.transform = this.style.webkitTransform = '';
-      // force layout to avoid application of transform
-      /** @suppress {suspiciousCode} */ this.offsetWidth;
+      // Force layout layout to avoid application of transform.
+      // Set offsetWidth to itself so that compilers won't remove it.
+      this.offsetWidth = this.offsetWidth;
       this.style.transition = this.style.webkitTransition = '';
     },
 
@@ -14620,6 +14678,7 @@ context. You should place this element as a child of `<body>` whenever possible.
         }
       } else {
         this._focusNode.blur();
+        this._focusedChild = null;
         this._manager.focusOverlay();
       }
     },
@@ -14630,7 +14689,7 @@ context. You should place this element as a child of `<body>` whenever possible.
         if (this.noCancelOnOutsideClick) {
           this._applyFocus();
         } else {
-          this.cancel();
+          this.cancel(event);
         }
       }
     },
@@ -14640,7 +14699,7 @@ context. You should place this element as a child of `<body>` whenever possible.
       if (this._manager.currentOverlay() === this &&
           !this.noCancelOnEscKey &&
           event.keyCode === ESC) {
-        this.cancel();
+        this.cancel(event);
       }
     },
 
@@ -14661,6 +14720,17 @@ context. You should place this element as a child of `<body>` whenever possible.
       if (this.opened) {
         this.refit();
       }
+    },
+
+    /**
+     * @protected
+     * Will call notifyResize if overlay is opened.
+     * Can be overridden in order to avoid multiple observers on the same node.
+     */
+    _onNodesChange: function() {
+      if (this.opened) {
+        this.notifyResize();
+      }
     }
 
 /**
@@ -14672,6 +14742,7 @@ context. You should place this element as a child of `<body>` whenever possible.
  * Fired when the `iron-overlay` is canceled, but before it is closed.
  * Cancel the event to prevent the `iron-overlay` from closing.
  * @event iron-overlay-canceled
+ * @param {?Event} event The event in case the user pressed ESC or clicked outside the overlay
  */
 
 /**
@@ -14707,9 +14778,8 @@ context. You should place this element as a child of `<body>` whenever possible.
         margin: 12px;
         font-size: 14px;
         cursor: default;
-        -webkit-transition: visibility 0.3s, -webkit-transform 0.3s, opacity 0.3s;
-        transition: visibility 0.3s, transform 0.3s, opacity 0.3s;
-        visibility: hidden;
+        -webkit-transition: -webkit-transform 0.3s, opacity 0.3s;
+        transition: transform 0.3s, opacity 0.3s;
         opacity: 0;
         -webkit-transform: translateY(100px);
         transform: translateY(100px);
@@ -14728,7 +14798,6 @@ context. You should place this element as a child of `<body>` whenever possible.
       }
 
       :host(.paper-toast-open) {
-        visibility: visible;
         opacity: 1;
         -webkit-transform: translateY(0px);
         transform: translateY(0px);
@@ -14777,7 +14846,11 @@ context. You should place this element as a child of `<body>` whenever possible.
           noCancelOnOutsideClick: {
             type: Boolean,
             value: true
-          },
+          }
+        },
+
+        listeners: {
+          'transitionend': '__onTransitionEnd'
         },
 
         /**
@@ -14804,9 +14877,23 @@ context. You should place this element as a child of `<body>` whenever possible.
         },
 
         /**
-         * Show the toast. Same as `open()` from `IronOverlayBehavior`.
+         * Show the toast. Without arguments, this is the same as `open()` from `IronOverlayBehavior`.
+         * @param {Object|string|undefined} properties Properties to be set before opening the toast.
+         * e.g. `toast.show('hello')` or `toast.show({text: 'hello', duration: 3000})`
          */
-        show: function() {
+        show: function(properties) {
+          if (typeof properties == 'string') {
+            properties = { text: properties };
+          }
+          for (var property in properties) {
+            if (property.indexOf('_') === 0) {
+              console.warn('The property "' + property + '" is private and was not set.');
+            } else if (property in this) {
+              this[property] = properties[property];
+            } else {
+              console.warn('The property "' + property + '" is not valid.');
+            }
+          }
           this.open();
         },
 
@@ -14815,6 +14902,38 @@ context. You should place this element as a child of `<body>` whenever possible.
          */
         hide: function() {
           this.close();
+        },
+
+        /**
+         * Overridden from `IronFitBehavior`.
+         * Positions the toast at the bottom left of fitInto.
+         */
+        center: function () {
+          if (this.fitInto === window) {
+            this.style.bottom = this.style.left = '';
+          } else {
+            var rect = this.fitInto.getBoundingClientRect();
+            this.style.left = rect.left + 'px';
+            this.style.bottom = (window.innerHeight - rect.bottom) + 'px';
+          }
+        },
+
+        /**
+         * Called on transitions of the toast, indicating a finished animation
+         * @private
+         */
+        __onTransitionEnd: function(e) {
+          // there are different transitions that are happening when opening and
+          // closing the toast. The last one so far is for `opacity`.
+          // This marks the end of the transition, so we check for this to determine if this
+          // is the correct event.
+          if (e && e.target === this && e.propertyName === 'opacity') {
+            if (this.opened) {
+              this._finishRenderOpened();
+            } else {
+              this._finishRenderClosed();
+            }
+          }
         },
 
         /**
@@ -16225,6 +16344,298 @@ if (!window.Promise) {
     <span id="number"></span>
   </template>
   <script>
+  (function () {
+  var intlLibraryScript;
+  var intlLibraryLoadingStatus = 'initializing';
+
+  /**
+   * Set up Intl polyfill if required
+   */
+  function _setupIntlPolyfill () {
+    // Polyfill Intl if required
+    var intlLibraryUrl = this.resolveUrl('../intl/dist/Intl.min.js');
+    if (window.Intl) {
+      if (window.IntlPolyfill && window.Intl === window.IntlPolyfill) {
+        intlLibraryLoadingStatus = 'loaded';
+      }
+      else {
+        intlLibraryLoadingStatus = 'native';
+      }
+    }
+    else {
+      intlLibraryLoadingStatus = 'loading';
+      intlLibraryScript = document.createElement('script');
+      intlLibraryScript.setAttribute('src', intlLibraryUrl);
+      intlLibraryScript.setAttribute('id', 'intl-js-library');
+      intlLibraryScript.addEventListener('load', function intlLibraryLoaded (e) {
+        intlLibraryLoadingStatus = 'loaded';
+        e.target.removeEventListener('load', intlLibraryLoaded);
+        return false;
+      });
+      var s = document.querySelector('script') || document.body;
+      s.parentNode.insertBefore(intlLibraryScript, s);
+    }
+  }
+
+  /**
+   * Set up polyfill locale of Intl if required
+   *
+   * @param {String} locale Target locale to polyfill
+   * @param {Function} callback Callback function to handle locale load
+   * @return {Boolean} true if supported; false if callback will be called
+   */
+  function _setupIntlPolyfillLocale (locale, callback) {
+    if (!window.IntlPolyfill) {
+      switch (intlLibraryLoadingStatus) {
+      case 'loading':
+        if (intlLibraryScript) {
+          var libraryLoadedBindThis = function (e) {
+            _setupIntlPolyfillLocale.call(this, locale, callback);
+            e.target.removeEventListener('load', libraryLoadedBindThis);
+          }.bind(this);
+          intlLibraryScript.addEventListener('load', libraryLoadedBindThis);
+          return false;
+        }
+        else {
+          console.error('Intl.js is not being loaded');
+        }
+        break;
+      // impossible cases
+      case 'initializing':
+      case 'loaded':
+      case 'native':
+      default:
+        break;
+      }
+    }
+    else {
+      if (intlLibraryLoadingStatus !== 'native') {
+        var supported = Intl.NumberFormat.supportedLocalesOf(locale, { localeMatcher: 'lookup' });
+        var script;
+        var intlScript;
+        if (supported.length === 0) {
+          // load the locale
+          var fallbackLanguages = _enumerateFallbackLanguages(locale);
+          locale = fallbackLanguages.shift();
+          script = document.querySelector('script#intl-js-locale-' + locale);
+          if (!script) {
+            script = document.createElement('script');
+            script.setAttribute('id', 'intl-js-locale-' + locale);
+            script.setAttribute('src', this.resolveUrl('../intl/locale-data/jsonp/' + locale + '.js'));
+            var intlLocaleLoadedBindThis = function (e) {
+              if (e.target === script) {
+                e.target.removeEventListener('load', intlLocaleLoadedBindThis);
+                callback.call(this, locale);
+              }
+              return false;
+            }.bind(this);
+            var intlLocaleLoadErrorBindThis = function (e) {
+              if (e.target === script) {
+                e.target.removeEventListener('error', intlLocaleLoadErrorBindThis);
+                script.setAttribute('loaderror','');
+                locale = fallbackLanguages.shift();
+                if (!locale) {
+                  locale = this.DEFAULT_LANG;
+                }
+                var fallbackSupport = Intl.NumberFormat.supportedLocalesOf(locale, { localeMatcher: 'lookup'});
+                if (fallbackSupport.length > 0) {
+                  callback.call(this, locale);
+                }
+                else {
+                  _setupIntlPolyfillLocale.call(this, locale, callback);
+                }
+                return false;
+              }
+            }.bind(this);
+            script.addEventListener('load', intlLocaleLoadedBindThis);
+            script.addEventListener('error', intlLocaleLoadErrorBindThis);
+            intlScript = document.querySelector('script#intl-js-library') || document.body;
+            intlScript.parentNode.insertBefore(script, intlScript.nextSibling);
+          }
+          else if (!script.hasAttribute('loaderror')) {
+            // already loading
+            var anotherIntlLocaleLoadedBindThis = function (e) {
+              if (e.target === script) {
+                callback.call(this, locale);
+                e.target.removeEventListener('load', anotherIntlLocaleLoadedBindThis);
+                return false;
+              }
+            }.bind(this);
+            var anotherIntlLocaleLoadErrorBindThis = function (e) {
+              if (e.target === script) {
+                e.target.removeEventListener('error', anotherIntlLocaleLoadErrorBindThis);
+                locale = fallbackLanguages.shift();
+                if (!locale) {
+                  locale = this.DEFAULT_LANG;
+                }
+                var fallbackSupport = Intl.NumberFormat.supportedLocalesOf(locale, { localeMatcher: 'lookup'});
+                if (fallbackSupport.length > 0) {
+                  callback.call(this, locale);
+                }
+                else {
+                  _setupIntlPolyfillLocale.call(this, locale, callback);
+                }
+                return false;
+              }
+            }.bind(this);
+            script.addEventListener('load', anotherIntlLocaleLoadedBindThis);
+            script.addEventListener('error', anotherIntlLocaleLoadErrorBindThis);
+          }
+          else {
+            var enSupport = Intl.NumberFormat.supportedLocalesOf(this.DEFAULT_LANG, { localeMatcher: 'lookup'});
+            if (enSupport.length > 0) {
+              callback.call(this, this.DEFAULT_LANG);
+            }
+            else {
+              _setupIntlPolyfillLocale.call(this, this.DEFAULT_LANG, callback);
+            }
+          }
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Enumerate fallback locales for the target locale.
+   * 
+   * Subset implementation of BCP47 (https://tools.ietf.org/html/bcp47).
+   *
+   * ### Examples:
+   *
+   *| Target Locale | Fallback 1 | Fallback 2 | Fallback 3 |
+   *|:--------------|:-----------|:-----------|:-----------|
+   *| ru            | N/A        | N/A        | N/A        |
+   *| en-GB         | en         | N/A        | N/A        |
+   *| en-Latn-GB    | en-GB      | en-Latn    | en         |
+   *| fr-CA         | fr         | N/A        | N/A        |
+   *| zh-Hans-CN    | zh-Hans    | zh         | N/A        |
+   *| zh-CN         | zh-Hans    | zh         | N/A        |
+   *| zh-TW         | zh-Hant    | zh         | N/A        |
+   *
+   * #### Note:
+   *
+   * For zh language, the script Hans or Hant is supplied as its default script when a country/region code is supplied.
+   *
+   * @param {string} lang Target locale.
+   * @return {Array} List of fallback locales including the target locale at the index 0.
+   */
+  function _enumerateFallbackLanguages (lang) {
+    var result = [];
+    var parts;
+    var match;
+    var isExtLangCode = 0;
+    var extLangCode;
+    var isScriptCode = 0;
+    var scriptCode;
+    var isCountryCode = 0;
+    var countryCode;
+    var n;
+    if (!lang || lang.length === 0) {
+      result.push('');
+    }
+    else {
+      parts = lang.split(/[-_]/);
+      // normalize ISO-639-1 language codes
+      if (parts.length > 0 &&
+          parts[0].match(/^[A-Za-z]{2,3}$/)) {
+        // language codes have to be lowercased
+        // e.g. JA -> ja, FR -> fr
+        // TODO: normalize 3-letter codes to 2-letter codes
+        parts[0] = parts[0].toLowerCase();
+      }
+      // normalize ISO-639-3 extension language codes
+      if (parts.length >= 2 &&
+          parts[1].match(/^[A-Za-z]{3}$/) &&
+          !parts[1].match(/^[Cc][Hh][SsTt]$/)) { // exclude CHS,CHT
+        // extension language codes have to be lowercased
+        // e.g. YUE -> yue
+        isExtLangCode = 1;
+        extLangCode = parts[1] = parts[1].toLowerCase();
+      }
+      // normalize ISO-15924 script codes
+      if (parts.length >= isExtLangCode + 2 &&
+          (match = parts[isExtLangCode + 1].match(/^([A-Za-z])([A-Za-z]{3})$/))) {
+        // script codes have to be capitalized only at the first character
+        // e.g. HANs -> Hans, lAtN -> Latn
+        isScriptCode = 1;
+        scriptCode = parts[isExtLangCode + 1] = match[1].toUpperCase() + match[2].toLowerCase();
+      }
+      // normalize ISO-3166-1 country/region codes
+      if (parts.length >= isExtLangCode + isScriptCode + 2 &&
+          (match = parts[isExtLangCode + isScriptCode + 1].match(/^[A-Za-z0-9]{2,3}$/))) {
+        // country/region codes have to be capitalized
+        // e.g. cn -> CN, jP -> JP
+        isCountryCode = 1;
+        countryCode = parts[isExtLangCode + isScriptCode + 1] = match[0].toUpperCase();
+      }
+      // extensions have to be in lowercases
+      // e.g. U-cA-Buddhist -> u-ca-buddhist, X-LiNux -> x-linux
+      if (parts.length >= isExtLangCode + isScriptCode + isCountryCode + 2) {
+        for (n = isExtLangCode + isScriptCode + isCountryCode + 1; n < parts.length; n++) {
+          parts[n] = parts[n].toLowerCase();
+        }
+      }
+      // enumerate fallback languages
+      while (parts.length > 0) {
+        // normalize delimiters as -
+        // e.g. ja_JP -> ja-JP
+        result.push(parts.join('-'));
+        if (isScriptCode &&
+            isCountryCode &&
+            parts.length == isExtLangCode + isScriptCode + 2) {
+          // script code can be omitted to default
+          // e.g. en-Latn-GB -> en-GB, zh-Hans-CN -> zh-CN
+          parts.splice(isExtLangCode + isScriptCode, 1);
+          result.push(parts.join('-'));
+          parts.splice(isExtLangCode + isScriptCode, 0, scriptCode);
+        }
+        if (isExtLangCode &&
+            isCountryCode &&
+            parts.length == isExtLangCode + isScriptCode + 2) {
+          // ext lang code can be omitted to default
+          // e.g. zh-yue-Hans-CN -> zh-Hans-CN
+          parts.splice(isExtLangCode, 1);
+          result.push(parts.join('-'));
+          parts.splice(isExtLangCode, 0, extLangCode);
+        }
+        if (isExtLangCode &&
+            isScriptCode &&
+            parts.length == isExtLangCode + isScriptCode + 1) {
+          // ext lang code can be omitted to default
+          // e.g. zh-yue-Hans -> zh-Hans
+          parts.splice(isExtLangCode, 1);
+          result.push(parts.join('-'));
+          parts.splice(isExtLangCode, 0, extLangCode);
+        }
+        if (!isScriptCode &&
+            !isExtLangCode &&
+            isCountryCode &&
+            parts.length == 2) {
+          // default script code can be added in certain cases with country codes
+          // e.g. zh-CN -> zh-Hans-CN, zh-TW -> zh-Hant-TW
+          switch (result[result.length - 1]) {
+          case 'zh-CN':
+          case 'zh-CHS':
+            result.push('zh-Hans');
+            break;
+          case 'zh-TW':
+          case 'zh-SG':
+          case 'zh-HK':
+          case 'zh-CHT':
+            result.push('zh-Hant');
+            break;
+          default:
+            break;
+          }
+        }
+        parts.pop();
+      }
+    }
+    return result;
+  }
+
   Polymer({
     is: 'i18n-number',
 
@@ -16294,6 +16705,9 @@ if (!window.Promise) {
 
       /**
        * Formatted string rendered for UI
+       *
+       * Note:
+       *   - While Intl.js Polyfill locale module is being loaded, the value is set as `undefined` until load completion.
        */
       formatted: {
         type: String,
@@ -16309,6 +16723,13 @@ if (!window.Promise) {
      * Default locale constant 'en'
      */
     DEFAULT_LANG: 'en',
+
+    /**
+     * Start loading Intl polyfill before its registration
+     */
+    beforeRegister: function () {
+      _setupIntlPolyfill.call(this);
+    },
 
     ready: function () {
       this._setupObservers();
@@ -16438,16 +16859,35 @@ if (!window.Promise) {
       if (!lang) {
         lang = this.DEFAULT_LANG;
       }
-      if (Intl && Intl.NumberFormat) {
+      switch (intlLibraryLoadingStatus) {
+      case 'loaded':
+      case 'loading':
+      default:
+        try {
+          if (_setupIntlPolyfillLocale.call(this, lang, function (locale) {
+            this.lang = locale;
+            this._render.call(this, this.lang, this.options, this.raw, this.offset);
+          }.bind(this))) {
+            return new Intl.NumberFormat(lang, options).format(number);
+          }
+          else {
+            // waiting for callback
+            return undefined;
+          }
+        }
+        catch (e) {
+          return number.toString();
+        }
+        break;
+      case 'native':
+        // native
         try {
           return new Intl.NumberFormat(lang, options).format(number);
         }
         catch (e) {
-          return number.toLocaleString();
+          return number.toString();
         }
-      }
-      else {
-        return number.toLocaleString(lang, options);
+        break;
       }
     },
 
@@ -16476,9 +16916,11 @@ if (!window.Promise) {
         this.number = undefined;
         this.formatted = '';
       }
-      this.$.number.textContent = this.formatted;
+      this.$.number.textContent = this.formatted ? this.formatted : '';
       //console.log('i18n-number: _render ' + this.formatted);
-      this.fire('rendered');
+      if (typeof this.formatted !== 'undefined') {
+        this.fire('rendered');
+      }
     },
 
     /**
@@ -16501,6 +16943,7 @@ if (!window.Promise) {
       this._render(this.lang, this.options, this.raw, this.offset);
     }
   });
+  })();
   </script>
 </dom-module><script>var _cp=[function(e,t){return"other"},function(e,t){return t?"other":1==e?"one":"other"},function(e,t){return t?"other":0==e||1==e?"one":"other"},function(e,t){var r=String(e).split("."),n=!r[1];return t?"other":1==e&&n?"one":"other"}];!function(e,t){"function"==typeof define&&define.amd?define(t):"object"==typeof exports?module.exports=t:e.plurals=t}(this,{af:_cp[1],ak:_cp[2],am:function(e,t){return t?"other":e>=0&&1>=e?"one":"other"},ar:function(e,t){var r=String(e).split("."),n=Number(r[0])==e,o=n&&r[0].slice(-2);return t?"other":0==e?"zero":1==e?"one":2==e?"two":o>=3&&10>=o?"few":o>=11&&99>=o?"many":"other"},as:function(e,t){return t?1==e||5==e||7==e||8==e||9==e||10==e?"one":2==e||3==e?"two":4==e?"few":6==e?"many":"other":e>=0&&1>=e?"one":"other"},asa:_cp[1],ast:_cp[3],az:function(e,t){var r=String(e).split("."),n=r[0],o=n.slice(-1),c=n.slice(-2),i=n.slice(-3);return t?1==o||2==o||5==o||7==o||8==o||20==c||50==c||70==c||80==c?"one":3==o||4==o||100==i||200==i||300==i||400==i||500==i||600==i||700==i||800==i||900==i?"few":0==n||6==o||40==c||60==c||90==c?"many":"other":1==e?"one":"other"},be:function(e,t){var r=String(e).split("."),n=Number(r[0])==e,o=n&&r[0].slice(-1),c=n&&r[0].slice(-2);return t?2!=o&&3!=o||12==c||13==c?"other":"few":1==o&&11!=c?"one":o>=2&&4>=o&&(12>c||c>14)?"few":n&&0==o||o>=5&&9>=o||c>=11&&14>=c?"many":"other"},bem:_cp[1],bez:_cp[1],bg:_cp[1],bh:_cp[2],bm:_cp[0],bn:function(e,t){return t?1==e||5==e||7==e||8==e||9==e||10==e?"one":2==e||3==e?"two":4==e?"few":6==e?"many":"other":e>=0&&1>=e?"one":"other"},bo:_cp[0],br:function(e,t){var r=String(e).split("."),n=Number(r[0])==e,o=n&&r[0].slice(-1),c=n&&r[0].slice(-2),i=n&&r[0].slice(-6);return t?"other":1==o&&11!=c&&71!=c&&91!=c?"one":2==o&&12!=c&&72!=c&&92!=c?"two":(3==o||4==o||9==o)&&(10>c||c>19)&&(70>c||c>79)&&(90>c||c>99)?"few":0!=e&&n&&0==i?"many":"other"},brx:_cp[1],bs:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=n.slice(-2),p=o.slice(-1),h=o.slice(-2);return t?"other":c&&1==i&&11!=u||1==p&&11!=h?"one":c&&i>=2&&4>=i&&(12>u||u>14)||p>=2&&4>=p&&(12>h||h>14)?"few":"other"},ca:function(e,t){var r=String(e).split("."),n=!r[1];return t?1==e||3==e?"one":2==e?"two":4==e?"few":"other":1==e&&n?"one":"other"},ce:_cp[1],cgg:_cp[1],chr:_cp[1],ckb:_cp[1],cs:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1];return t?"other":1==e&&o?"one":n>=2&&4>=n&&o?"few":o?"other":"many"},cy:function(e,t){return t?0==e||7==e||8==e||9==e?"zero":1==e?"one":2==e?"two":3==e||4==e?"few":5==e||6==e?"many":"other":0==e?"zero":1==e?"one":2==e?"two":3==e?"few":6==e?"many":"other"},da:function(e,t){var r=String(e).split("."),n=r[0],o=Number(r[0])==e;return t?"other":1!=e&&(o||0!=n&&1!=n)?"other":"one"},de:_cp[3],dsb:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-2),u=o.slice(-2);return t?"other":c&&1==i||1==u?"one":c&&2==i||2==u?"two":c&&(3==i||4==i)||3==u||4==u?"few":"other"},dv:_cp[1],dz:_cp[0],ee:_cp[1],el:_cp[1],en:function(e,t){var r=String(e).split("."),n=!r[1],o=Number(r[0])==e,c=o&&r[0].slice(-1),i=o&&r[0].slice(-2);return t?1==c&&11!=i?"one":2==c&&12!=i?"two":3==c&&13!=i?"few":"other":1==e&&n?"one":"other"},eo:_cp[1],es:_cp[1],et:_cp[3],eu:_cp[1],fa:function(e,t){return t?"other":e>=0&&1>=e?"one":"other"},ff:function(e,t){return t?"other":e>=0&&2>e?"one":"other"},fi:_cp[3],fil:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=o.slice(-1);return t?1==e?"one":"other":c&&(1==n||2==n||3==n)||c&&4!=i&&6!=i&&9!=i||!c&&4!=u&&6!=u&&9!=u?"one":"other"},fo:_cp[1],fr:function(e,t){return t?1==e?"one":"other":e>=0&&2>e?"one":"other"},fur:_cp[1],fy:_cp[3],ga:function(e,t){var r=String(e).split("."),n=Number(r[0])==e;return t?1==e?"one":"other":1==e?"one":2==e?"two":n&&e>=3&&6>=e?"few":n&&e>=7&&10>=e?"many":"other"},gd:function(e,t){var r=String(e).split("."),n=Number(r[0])==e;return t?"other":1==e||11==e?"one":2==e||12==e?"two":n&&e>=3&&10>=e||n&&e>=13&&19>=e?"few":"other"},gl:_cp[3],gsw:_cp[1],gu:function(e,t){return t?1==e?"one":2==e||3==e?"two":4==e?"few":6==e?"many":"other":e>=0&&1>=e?"one":"other"},guw:_cp[2],gv:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=n.slice(-1),i=n.slice(-2);return t?"other":o&&1==c?"one":o&&2==c?"two":!o||0!=i&&20!=i&&40!=i&&60!=i&&80!=i?o?"other":"many":"few"},ha:_cp[1],haw:_cp[1],he:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=Number(r[0])==e,i=c&&r[0].slice(-1);return t?"other":1==e&&o?"one":2==n&&o?"two":o&&(0>e||e>10)&&c&&0==i?"many":"other"},hi:function(e,t){return t?1==e?"one":2==e||3==e?"two":4==e?"few":6==e?"many":"other":e>=0&&1>=e?"one":"other"},hr:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=n.slice(-2),p=o.slice(-1),h=o.slice(-2);return t?"other":c&&1==i&&11!=u||1==p&&11!=h?"one":c&&i>=2&&4>=i&&(12>u||u>14)||p>=2&&4>=p&&(12>h||h>14)?"few":"other"},hsb:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-2),u=o.slice(-2);return t?"other":c&&1==i||1==u?"one":c&&2==i||2==u?"two":c&&(3==i||4==i)||3==u||4==u?"few":"other"},hu:function(e,t){return t?1==e||5==e?"one":"other":1==e?"one":"other"},hy:function(e,t){return t?1==e?"one":"other":e>=0&&2>e?"one":"other"},id:_cp[0],ig:_cp[0],ii:_cp[0],"in":_cp[0],is:function(e,t){var r=String(e).split("."),n=r[0],o=Number(r[0])==e,c=n.slice(-1),i=n.slice(-2);return t?"other":o&&1==c&&11!=i||!o?"one":"other"},it:function(e,t){var r=String(e).split("."),n=!r[1];return t?11==e||8==e||80==e||800==e?"many":"other":1==e&&n?"one":"other"},iu:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},iw:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=Number(r[0])==e,i=c&&r[0].slice(-1);return t?"other":1==e&&o?"one":2==n&&o?"two":o&&(0>e||e>10)&&c&&0==i?"many":"other"},ja:_cp[0],jbo:_cp[0],jgo:_cp[1],ji:_cp[3],jmc:_cp[1],jv:_cp[0],jw:_cp[0],ka:function(e,t){var r=String(e).split("."),n=r[0],o=n.slice(-2);return t?1==n?"one":0==n||o>=2&&20>=o||40==o||60==o||80==o?"many":"other":1==e?"one":"other"},kab:function(e,t){return t?"other":e>=0&&2>e?"one":"other"},kaj:_cp[1],kcg:_cp[1],kde:_cp[0],kea:_cp[0],kk:function(e,t){var r=String(e).split("."),n=Number(r[0])==e,o=n&&r[0].slice(-1);return t?6==o||9==o||n&&0==o&&0!=e?"many":"other":1==e?"one":"other"},kkj:_cp[1],kl:_cp[1],km:_cp[0],kn:function(e,t){return t?"other":e>=0&&1>=e?"one":"other"},ko:_cp[0],ks:_cp[1],ksb:_cp[1],ksh:function(e,t){return t?"other":0==e?"zero":1==e?"one":"other"},ku:_cp[1],kw:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},ky:_cp[1],lag:function(e,t){var r=String(e).split("."),n=r[0];return t?"other":0==e?"zero":0!=n&&1!=n||0==e?"other":"one"},lb:_cp[1],lg:_cp[1],lkt:_cp[0],ln:_cp[2],lo:function(e,t){return t&&1==e?"one":"other"},lt:function(e,t){var r=String(e).split("."),n=r[1]||"",o=Number(r[0])==e,c=o&&r[0].slice(-1),i=o&&r[0].slice(-2);return t?"other":1==c&&(11>i||i>19)?"one":c>=2&&9>=c&&(11>i||i>19)?"few":0!=n?"many":"other"},lv:function(e,t){var r=String(e).split("."),n=r[1]||"",o=n.length,c=Number(r[0])==e,i=c&&r[0].slice(-1),u=c&&r[0].slice(-2),p=n.slice(-2),h=n.slice(-1);return t?"other":c&&0==i||u>=11&&19>=u||2==o&&p>=11&&19>=p?"zero":1==i&&11!=u||2==o&&1==h&&11!=p||2!=o&&1==h?"one":"other"},mas:_cp[1],mg:_cp[2],mgo:_cp[1],mk:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=n.slice(-2),p=o.slice(-1);return t?1==i&&11!=u?"one":2==i&&12!=u?"two":7!=i&&8!=i||17==u||18==u?"other":"many":c&&1==i||1==p?"one":"other"},ml:_cp[1],mn:_cp[1],mo:function(e,t){var r=String(e).split("."),n=!r[1],o=Number(r[0])==e,c=o&&r[0].slice(-2);return t?1==e?"one":"other":1==e&&n?"one":!n||0==e||1!=e&&c>=1&&19>=c?"few":"other"},mr:function(e,t){return t?1==e?"one":2==e||3==e?"two":4==e?"few":"other":e>=0&&1>=e?"one":"other"},ms:function(e,t){return t&&1==e?"one":"other"},mt:function(e,t){var r=String(e).split("."),n=Number(r[0])==e,o=n&&r[0].slice(-2);return t?"other":1==e?"one":0==e||o>=2&&10>=o?"few":o>=11&&19>=o?"many":"other"},my:_cp[0],nah:_cp[1],naq:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},nb:_cp[1],nd:_cp[1],ne:function(e,t){var r=String(e).split("."),n=Number(r[0])==e;return t?n&&e>=1&&4>=e?"one":"other":1==e?"one":"other"},nl:_cp[3],nn:_cp[1],nnh:_cp[1],no:_cp[1],nqo:_cp[0],nr:_cp[1],nso:_cp[2],ny:_cp[1],nyn:_cp[1],om:_cp[1],or:_cp[1],os:_cp[1],pa:_cp[2],pap:_cp[1],pl:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=n.slice(-1),i=n.slice(-2);return t?"other":1==e&&o?"one":o&&c>=2&&4>=c&&(12>i||i>14)?"few":o&&1!=n&&(0==c||1==c)||o&&c>=5&&9>=c||o&&i>=12&&14>=i?"many":"other"},prg:function(e,t){var r=String(e).split("."),n=r[1]||"",o=n.length,c=Number(r[0])==e,i=c&&r[0].slice(-1),u=c&&r[0].slice(-2),p=n.slice(-2),h=n.slice(-1);return t?"other":c&&0==i||u>=11&&19>=u||2==o&&p>=11&&19>=p?"zero":1==i&&11!=u||2==o&&1==h&&11!=p||2!=o&&1==h?"one":"other"},ps:_cp[1],pt:function(e,t){var r=String(e).split("."),n=Number(r[0])==e;return t?"other":n&&e>=0&&2>=e&&2!=e?"one":"other"},"pt-PT":_cp[3],rm:_cp[1],ro:function(e,t){var r=String(e).split("."),n=!r[1],o=Number(r[0])==e,c=o&&r[0].slice(-2);return t?1==e?"one":"other":1==e&&n?"one":!n||0==e||1!=e&&c>=1&&19>=c?"few":"other"},rof:_cp[1],root:_cp[0],ru:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=n.slice(-1),i=n.slice(-2);return t?"other":o&&1==c&&11!=i?"one":o&&c>=2&&4>=c&&(12>i||i>14)?"few":o&&0==c||o&&c>=5&&9>=c||o&&i>=11&&14>=i?"many":"other"},rwk:_cp[1],sah:_cp[0],saq:_cp[1],sdh:_cp[1],se:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},seh:_cp[1],ses:_cp[0],sg:_cp[0],sh:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=n.slice(-2),p=o.slice(-1),h=o.slice(-2);return t?"other":c&&1==i&&11!=u||1==p&&11!=h?"one":c&&i>=2&&4>=i&&(12>u||u>14)||p>=2&&4>=p&&(12>h||h>14)?"few":"other"},shi:function(e,t){var r=String(e).split("."),n=Number(r[0])==e;return t?"other":e>=0&&1>=e?"one":n&&e>=2&&10>=e?"few":"other"},si:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"";return t?"other":0==e||1==e||0==n&&1==o?"one":"other"},sk:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1];return t?"other":1==e&&o?"one":n>=2&&4>=n&&o?"few":o?"other":"many"},sl:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=n.slice(-2);return t?"other":o&&1==c?"one":o&&2==c?"two":o&&(3==c||4==c)||!o?"few":"other"},sma:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},smi:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},smj:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},smn:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},sms:function(e,t){return t?"other":1==e?"one":2==e?"two":"other"},sn:_cp[1],so:_cp[1],sq:function(e,t){var r=String(e).split("."),n=Number(r[0])==e,o=n&&r[0].slice(-1),c=n&&r[0].slice(-2);return t?1==e?"one":4==o&&14!=c?"many":"other":1==e?"one":"other"},sr:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=n.slice(-2),p=o.slice(-1),h=o.slice(-2);return t?"other":c&&1==i&&11!=u||1==p&&11!=h?"one":c&&i>=2&&4>=i&&(12>u||u>14)||p>=2&&4>=p&&(12>h||h>14)?"few":"other"},ss:_cp[1],ssy:_cp[1],st:_cp[1],sv:function(e,t){var r=String(e).split("."),n=!r[1],o=Number(r[0])==e,c=o&&r[0].slice(-1),i=o&&r[0].slice(-2);return t?1!=c&&2!=c||11==i||12==i?"other":"one":1==e&&n?"one":"other"},sw:_cp[3],syr:_cp[1],ta:_cp[1],te:_cp[1],teo:_cp[1],th:_cp[0],ti:_cp[2],tig:_cp[1],tk:_cp[1],tl:function(e,t){var r=String(e).split("."),n=r[0],o=r[1]||"",c=!r[1],i=n.slice(-1),u=o.slice(-1);return t?1==e?"one":"other":c&&(1==n||2==n||3==n)||c&&4!=i&&6!=i&&9!=i||!c&&4!=u&&6!=u&&9!=u?"one":"other"},tn:_cp[1],to:_cp[0],tr:_cp[1],ts:_cp[1],tzm:function(e,t){var r=String(e).split("."),n=Number(r[0])==e;return t?"other":0==e||1==e||n&&e>=11&&99>=e?"one":"other"},ug:_cp[1],uk:function(e,t){var r=String(e).split("."),n=r[0],o=!r[1],c=Number(r[0])==e,i=c&&r[0].slice(-1),u=c&&r[0].slice(-2),p=n.slice(-1),h=n.slice(-2);return t?3==i&&13!=u?"few":"other":o&&1==p&&11!=h?"one":o&&p>=2&&4>=p&&(12>h||h>14)?"few":o&&0==p||o&&p>=5&&9>=p||o&&h>=11&&14>=h?"many":"other"},ur:_cp[3],uz:_cp[1],ve:_cp[1],vi:function(e,t){return t&&1==e?"one":"other"},vo:_cp[1],vun:_cp[1],wa:_cp[2],wae:_cp[1],wo:_cp[0],xh:_cp[1],xog:_cp[1],yi:_cp[3],yo:_cp[0],zh:_cp[0],zu:function(e,t){return t?"other":e>=0&&1>=e?"one":"other"}});</script>
 
@@ -16632,6 +17075,9 @@ Polymer({
         if (Polymer.dom(mutation.target).parentNode.tagName.toLowerCase() !== 'i18n-number') {
           this.render();
         }
+        else if (typeof Polymer.dom(mutation.target).parentNode.formatted !== 'undefined') {
+          this.render();
+        }
         break;
       default:
         break;
@@ -16755,7 +17201,8 @@ Polymer({
         if (param.tagName.toLowerCase() === 'i18n-number') {
           // plural selector
           var category = this._getPluralCategory(param.number);
-          if (typeof param.number === 'undefined') {
+          if (typeof param.number === 'undefined' ||
+              typeof param.formatted === 'undefined') {
             // i18n-number is not ready
             //console.log('i18n-format: i18n-number is not ready');
             templateObject = undefined;
@@ -17526,7 +17973,6 @@ Polymer({
    *
    * ### TODOs
    *
-   * - Support compound bindings since Polymer 1.2
    * - Support user locale preference per user
    *
    * @polymerBehavior BehaviorsStore.I18nBehavior
@@ -18384,26 +18830,34 @@ Polymer({
         case 'string':
         case 'number':
         case 'boolean':
-          target[prop] = map(value, prop);
+          if (typeof target === 'object') {
+            target[prop] = map(value, prop);
+          }
           break;
         case 'object':
-          if (Array.isArray(value)) {
-            // TODO: cannot handle deep objects properly
-            target[prop] = target[prop] || [];
-            this._deepMap(target[prop], value, map);
-          }
-          else {
-            target[prop] = target[prop] || {};
-            this._deepMap(target[prop], value, map);
+          if (typeof target === 'object') {
+            if (Array.isArray(value)) {
+              // TODO: cannot handle deep objects properly
+              target[prop] = target[prop] || [];
+              this._deepMap(target[prop], value, map);
+            }
+            else {
+              target[prop] = target[prop] || {};
+              this._deepMap(target[prop], value, map);
+            }
           }
           break;
         case 'function':
         case 'symbol':
         case 'undefined':
-          target[prop] = value;
+          if (typeof target === 'object') {
+            target[prop] = value;
+          }
           break;
         default:
-          target[prop] = value;
+          if (typeof target === 'object') {
+            target[prop] = value;
+          }
           break;
         }
       }
@@ -18779,6 +19233,7 @@ Polymer({
       var i;
       var whiteSpaceElements = 0;
       var isWhiteSpace = false;
+      var isCompoundAnnotatedNode = false;
       var text;
       var span;
       var name = node.nodeName.toLowerCase();
@@ -18786,6 +19241,9 @@ Polymer({
                  (node.getAttribute('text-id') || 
                   node.getAttribute('id')) : null;
       var messageId;
+      var n;
+      var templateText;
+      var templateTextParams;
       path.push(id ? '#' + id : name + (index > 0 ? '_' + index : ''));
       //console.log(path.join(':'));
       switch (node.nodeType) {
@@ -18886,13 +19344,20 @@ Polymer({
           }
           // pick up element attributes
           this._traverseAttributes(node, path, bundle);
+          // check annonated node
+          isCompoundAnnotatedNode = false;
           if (node.childElementCount === 0) {
+            if (node.textContent) {
+              isCompoundAnnotatedNode = this._isCompoundAnnotatedText(node.textContent);
+            }
+          }
+          if (node.childElementCount === 0 && !isCompoundAnnotatedNode) {
             if (node.textContent) { // use textContent for Firefox compatibility
               text = node.textContent;
               if (text.length === 0 || text.match(/^\s*$/g)) {
                 // skip empty or whitespace node
               }
-              else if (text.match(/^{{.*}}$/) || text.match(/^\[\[.*\]\]$/)) {
+              else if (text.trim().match(/^({{[^{}]*}}|\[\[[^\[\]]*\]\])$/)) {
                 // skip annotation node
                 // TODO: compound bindings support
               }
@@ -18901,7 +19366,7 @@ Polymer({
                 // generate message id
                 messageId = this._generateMessageId(path, id);
                 // store the text message
-                text = text.trim();
+                text = text.replace(/^[\s]*[\s]/, ' ').replace(/[\s][\s]*$/, ' ');
                 if (name === 'json-data') {
                   this._setBundleValue(bundle, messageId, JSON.parse(text));
                 }
@@ -18922,7 +19387,7 @@ Polymer({
             }
           } 
           else {
-            // has children
+            // has children or compound annotation
             // check if i18n-format is applicable
             var childStatus = Array.prototype.map.call(
               node.childNodes, function (child) {
@@ -18930,8 +19395,13 @@ Polymer({
                   hasText: child.nodeType === child.TEXT_NODE && 
                            child.textContent.length > 0 && 
                            !child.textContent.match(/^\s*$/g), 
+                  hasCompoundAnnotatedText: child.nodeType === child.TEXT_NODE &&
+                                            this._isCompoundAnnotatedText(child.textContent),
                   hasTextChild: child.nodeType === child.ELEMENT_NODE &&
                                 child.childElementCount === 0, // including <br>
+                  hasCompoundAnnotatedChildNode: child.nodeType === child.ELEMENT_NODE &&
+                                                 child.childElementCount === 0 &&
+                                                 this._isCompoundAnnotatedText(child.textContent),
                   hasGrandChildren: child.nodeType === child.ELEMENT_NODE &&
                                     Array.prototype.map.call(
                                       child.childNodes, 
@@ -18942,20 +19412,25 @@ Polymer({
                                       return prev || current;
                                     }, false)
                 };
-              }).reduce(function (prev, current) { 
+              }.bind(this)).reduce(function (prev, current) { 
                 return {
                   hasText: prev.hasText || current.hasText,
+                  hasCompoundAnnotatedText: prev.hasCompoundAnnotatedText || current.hasCompoundAnnotatedText,
                   hasTextChild: prev.hasTextChild || current.hasTextChild,
+                  hasCompoundAnnotatedChildNode: prev.hasCompoundAnnotatedChildNode || current.hasCompoundAnnotatedChildNode,
                   hasGrandChildren: prev.hasGrandChildren || current.hasGrandChildren
                 };
               }, { 
                 hasText: false, 
+                hasCompoundAnnotatedText: false,
                 hasTextChild: false,
+                hasCompoundAnnotatedChildNode: false,
                 hasGrandChildren: false
               });
-            if ((childStatus.hasText || node.hasAttribute('text-id')) && 
-                childStatus.hasTextChild && 
-                !childStatus.hasGrandChildren) {
+            if ((childStatus.hasText || node.hasAttribute('text-id')) &&
+                (childStatus.hasTextChild || childStatus.hasCompoundAnnotatedText) && 
+                !childStatus.hasGrandChildren &&
+                !childStatus.hasCompoundAnnotatedChildNode) {
               // apply i18n-format
               /*
                     <i18n-format>
@@ -18965,59 +19440,79 @@ Polymer({
                       <a param="3" href="link2">{{text.simpleChartDesc.3}}</a>
                     </i18n-format>
               */
-              var n = 0;
+              n = 0;
               messageId = this._generateMessageId(path, id);
-              var templateTextParams = Array.prototype.map.call(
+              templateTextParams = Array.prototype.map.call(
                 node.childNodes, function (child) {
-                  return {
-                    node: child,
-                    type: child.nodeType,
-                    text: child.nodeType === child.TEXT_NODE ? 
-                            child.textContent : null,
-                    childTextNode: child.nodeType === child.ELEMENT_NODE &&
-                                   child.childNodes.length > 0
-                  };
-                }).reduce(function (prev, current) {
-                  if (current.text) {
-                    prev.text[0] += current.text;
+                  if (child.nodeType === child.TEXT_NODE &&
+                      this._hasAnnotatedText(child.textContent)) {
+                    return this._compoundAnnotationToSpan(child)
+                      .map(function (_child) {
+                        return {
+                          node: _child,
+                          type: _child.nodeType,
+                          text: _child.nodeType === _child.TEXT_NODE ? 
+                                  _child.textContent : null,
+                          childTextNode: _child.nodeType === _child.ELEMENT_NODE &&
+                                         _child.childNodes.length > 0
+                        };
+                      });
                   }
-                  if (current.type === current.node.ELEMENT_NODE) {
-                    n++;
-                    prev.text[0] += '{' + n + '}';
-                    path.push(n);
-                    this._traverseAttributes(current.node, path, bundle);
-                    path.pop();
-                    if (current.childTextNode) {
-                      var textContent = current.node.textContent;
-                      if (textContent.length === 0) {
-                        // tag without textContent
-                        prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
-                        current.node.textContent = '';
-                      }
-                      else if (textContent.match(/^\s*$/g)) {
-                        // tag with whitespace textContent
-                        prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
-                        current.node.textContent = ' ';
-                      }
-                      else if (textContent.match(/^{{.*}}$/) || textContent.match(/^\[\[.*\]\]$/)) {
-                        // tag with annotation
-                        prev.text.push(textContent);
-                        // textContent is untouched
+                  else {
+                    return [{
+                      node: child,
+                      type: child.nodeType,
+                      text: child.nodeType === child.TEXT_NODE ? 
+                              child.textContent : null,
+                      childTextNode: child.nodeType === child.ELEMENT_NODE &&
+                                     child.childNodes.length > 0
+                    }];
+                  }
+                }.bind(this)).reduce(function (prev, currentList) {
+                  var current;
+                  for (var i = 0; i < currentList.length; i++) {
+                    current = currentList[i];
+                    if (current.text) {
+                      prev.text[0] += current.text;
+                    }
+                    if (current.type === current.node.ELEMENT_NODE) {
+                      n++;
+                      prev.text[0] += '{' + n + '}';
+                      path.push(n);
+                      this._traverseAttributes(current.node, path, bundle);
+                      path.pop();
+                      if (current.childTextNode) {
+                        var textContent = current.node.textContent;
+                        if (textContent.length === 0) {
+                          // tag without textContent
+                          prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
+                          current.node.textContent = '';
+                        }
+                        else if (textContent.match(/^\s*$/g)) {
+                          // tag with whitespace textContent
+                          prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
+                          current.node.textContent = ' ';
+                        }
+                        else if (textContent.match(/^({{.*}}|\[\[.*\]\])$/)) {
+                          // tag with annotation
+                          prev.text.push(textContent);
+                          // textContent is untouched
+                        }
+                        else {
+                          prev.text.push(current.node.textContent.replace(/^[\s]*[\s]/, ' ').replace(/[\s][\s]*$/, ' '));
+                          current.node.textContent = '{{text.' + messageId + '.' + n + '}}';
+                        }
                       }
                       else {
-                        prev.text.push(current.node.textContent.trim());
-                        current.node.textContent = '{{text.' + messageId + '.' + n + '}}';
+                        prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
                       }
+                      current.node.setAttribute('param', n.toString());
+                      prev.params.push(current.node);
                     }
-                    else {
-                      prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
-                    }
-                    current.node.setAttribute('param', n.toString());
-                    prev.params.push(current.node);
                   }
                   return prev;
                 }.bind(this), { text: [ '' ], params: [ '{{text.' + messageId + '.0}}' ] });
-              var templateText = document.createElement('i18n-format');
+              templateText = document.createElement('i18n-format');
               templateText.setAttribute('lang', '{{effectiveLang}}');
               span = document.createElement('span');
               // span.innerText does not set an effective value in Firefox
@@ -19029,7 +19524,7 @@ Polymer({
                 }
               );
               // store the text message
-              templateTextParams.text[0] = templateTextParams.text[0].trim();
+              templateTextParams.text[0] = templateTextParams.text[0].replace(/^[\s]*[\s]/, ' ').replace(/[\s][\s]*$/, ' ');
               this._setBundleValue(bundle, messageId, templateTextParams.text);
               // insert i18n-format
               node.innerHTML = '';
@@ -19060,32 +19555,119 @@ Polymer({
           // skip empty or whitespace node
           isWhiteSpace = true;
         }
-        else if (text.match(/^{{.*}}$/) || text.match(/^\[\[.*\]\]$/)) {
+        else if (text.trim().match(/^({{[^{}]*}}|\[\[[^\[\]]*\]\])$/)) {
           // skip annotation node
         }
         else {
           var parent = node.parentNode;
-          span = document.createElement('span');
 
-          // replace text node with span
-          Polymer.dom(parent).insertBefore(span, node);
-          Polymer.dom(parent).removeChild(node);
-
-          // update path
-          path[path.length - 1] = path[path.length - 1].replace('#text', 'span');
-
-          // generate message id
-          messageId = this._generateMessageId(path, id);
-          // store the text message
-          text = text.trim();
-          this._setBundleValue(bundle, messageId, text);
-          // replace textContent with annotation
-          span.textContent = '{{text.' + messageId + '}}';
-          if (!id) {
-            //span.id = messageId;
-            //console.warn('add missing span with id as ' + messageId + ' for ' + text);
+          if (this._isCompoundAnnotatedText(text)) {
+            // apply i18n-format
+            n = 0;
+            messageId = this._generateMessageId(path, id);
+            templateTextParams = Array.prototype.map.call(
+              [ node ], function (child) {
+                if (child.nodeType === child.TEXT_NODE &&
+                    this._hasAnnotatedText(child.textContent)) {
+                  return this._compoundAnnotationToSpan(child)
+                    .map(function (_child) {
+                      return {
+                        node: _child,
+                        type: _child.nodeType,
+                        text: _child.nodeType === _child.TEXT_NODE ? 
+                                _child.textContent : null,
+                        childTextNode: _child.nodeType === _child.ELEMENT_NODE &&
+                                       _child.childNodes.length > 0
+                      };
+                    });
+                }
+                else {
+                  return [{
+                    node: child,
+                    type: child.nodeType,
+                    text: child.nodeType === child.TEXT_NODE ? 
+                            child.textContent : null,
+                    childTextNode: child.nodeType === child.ELEMENT_NODE &&
+                                   child.childNodes.length > 0
+                  }];
+                }
+              }.bind(this)).reduce(function (prev, currentList) {
+                var current;
+                for (var i = 0; i < currentList.length; i++) {
+                  current = currentList[i];
+                  if (current.text) {
+                    prev.text[0] += current.text;
+                  }
+                  if (current.type === current.node.ELEMENT_NODE) {
+                    n++;
+                    prev.text[0] += '{' + n + '}';
+                    path.push(n);
+                    this._traverseAttributes(current.node, path, bundle);
+                    path.pop();
+                    if (current.childTextNode) {
+                      var textContent = current.node.textContent;
+                      if (textContent.length === 0) {
+                        // tag without textContent
+                        prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
+                        current.node.textContent = '';
+                      }
+                      else if (textContent.match(/^\s*$/g)) {
+                        // tag with whitespace textContent
+                        prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
+                        current.node.textContent = ' ';
+                      }
+                      else if (textContent.match(/^({{.*}}|\[\[.*\]\])$/)) {
+                        // tag with annotation
+                        prev.text.push(textContent);
+                        // textContent is untouched
+                      }
+                      else {
+                        prev.text.push(current.node.textContent.replace(/^[\s]*[\s]/, ' ').replace(/[\s][\s]*$/, ' '));
+                        current.node.textContent = '{{text.' + messageId + '.' + n + '}}';
+                      }
+                    }
+                    else {
+                      prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
+                    }
+                    current.node.setAttribute('param', n.toString());
+                    prev.params.push(current.node);
+                  }
+                }
+                return prev;
+              }.bind(this), { text: [ '' ], params: [ '{{text.' + messageId + '.0}}' ] });
+            templateText = document.createElement('i18n-format');
+            templateText.setAttribute('lang', '{{effectiveLang}}');
+            span = document.createElement('span');
+            // span.innerText does not set an effective value in Firefox
+            span.textContent = templateTextParams.params.shift();
+            templateText.appendChild(span);
+            Array.prototype.forEach.call(templateTextParams.params,
+              function (param) {
+                templateText.appendChild(param);
+              }
+            );
+            // store the text message
+            templateTextParams.text[0] = templateTextParams.text[0].replace(/^[\s]*[\s]/, ' ').replace(/[\s][\s]*$/, ' ');
+            this._setBundleValue(bundle, messageId, templateTextParams.text);
+            // insert i18n-format
+            Polymer.dom(parent).insertBefore(templateText, node);
+            Polymer.dom(parent).removeChild(node);
+            debuglog(messageId + ' = ' + templateTextParams.text);
           }
-          debuglog(messageId + ' = ' + text);
+          else {
+            // generate message id
+            messageId = this._generateMessageId(path, id);
+            // store the text message
+            text = text.replace(/^[\s]*[\s]/, ' ').replace(/[\s][\s]*$/, ' ');
+            this._setBundleValue(bundle, messageId, text);
+            // replace textContent with annotation
+            node.textContent = '{{text.' + messageId + '}}';
+            if (!id) {
+              //span.id = messageId;
+              //console.warn('add missing span with id as ' + messageId + ' for ' + text);
+            }
+            debuglog(messageId + ' = ' + text);
+          }
         }
         break;
       case node.DOCUMENT_NODE:
@@ -19105,6 +19687,77 @@ Polymer({
       }
       path.pop();
       return isWhiteSpace;
+    },
+
+    /**
+     * Check if the text has compound annotation 
+     * 
+     * @param {string} text target text to check compound annotation
+     * @return {Boolean} true if the text contains compound annotation
+     */
+    _isCompoundAnnotatedText: function (text) {
+      return !text.trim().match(/^({{[^{}]*}}|\[\[[^\[\]]*\]\])$/) &&
+             !!text.match(/({{[^{}]*}}|\[\[[^\[\]]*\]\])/);
+    },
+
+    /**
+     * Check if the text has annotation 
+     * 
+     * @param {string} text target text to check annotation
+     * @return {Boolean} true if the text contains annotation
+     */
+    _hasAnnotatedText: function (text) {
+      return !!text.match(/({{[^{}]*}}|\[\[[^\[\]]*\]\])/);
+    },
+
+    /**
+     * Convert compound annotations to span elements
+     * 
+     * @param {Text} node target text node to convert compound annotations
+     * @return {Object[]} Array of Text or span elements
+     */
+    _compoundAnnotationToSpan: function (node) {
+      var result;
+      if (node.textContent.match(/({{[^{}]*}}|\[\[[^\[\]]*\]\])/)) {
+        result = node.textContent
+          .match(/({{[^{}]*}}|\[\[[^\[\]]*\]\]|[^{}\[\]]{1,}|[{}\[\]]{1,})/g)
+          .reduce(function (prev, current) {
+            if (current.match(/^({{[^{}]*}}|\[\[[^\[\]]*\]\])$/)) {
+              prev.push(current);
+              prev.push('');
+            }
+            else {
+              if (prev.length === 0) {
+                prev.push(current);
+              }
+              else {
+                prev[prev.length - 1] += current;
+              }
+            }
+            return prev;
+          }.bind(this), [])
+          .map(function (item) {
+            var childNode;
+            if (item.match(/^({{[^{}]*}}|\[\[[^\[\]]*\]\])$/)) {
+              childNode = document.createElement('span');
+              childNode.textContent = item;
+            }
+            else {
+              childNode = document.createTextNode(item);
+            }
+            return childNode;
+          });
+        if (result.length > 0) {
+          if (!result[result.length - 1]) {
+            result.pop(); // pop ''
+          }
+        }
+      }
+      else {
+        // no compound annotation
+        result = [ node ];
+      }
+      return result;
     },
 
     /**
@@ -19150,7 +19803,12 @@ Polymer({
         for (var i = 1; i < path.length; i++) {
           if (path[i][0] === '#') {
             if (path[i] !== '#document-fragment') {
-              messageId = path[i].substr(1);
+              if (messageId && path[i].substr(0, 5) === '#text') {
+                messageId += ':' + path[i].substr(1);
+              }
+              else {
+                messageId = path[i].substr(1);
+              }
             }
           }
           else {
@@ -20780,7 +21438,12 @@ module.exports = Array.isArray || function (arr) {
   
 <template id="localizable-text">
 <json-data>
-{"meta":{},"model":{},"span_2":"Update text to change the greeting.","welcome":"Welcome!"}
+{
+  "meta": {},
+  "model": {},
+  "span_2": "Update text to change the greeting.",
+  "welcome": "Welcome!"
+}
 </json-data>
 </template>
 </template>
@@ -20837,7 +21500,18 @@ module.exports = Array.isArray || function (arr) {
   
 <template id="localizable-text">
 <json-data>
-{"meta":{},"model":{},"items":["Responsive Web App boilerplate","Iron Elements and Paper Elements","End-to-end Build Tooling (including Vulcanize)","Unit testing with Web Component Tester","Routing with Page.js","Offline support with the Platinum Service Worker Elements"]}
+{
+  "meta": {},
+  "model": {},
+  "items": [
+    "Responsive Web App boilerplate",
+    "Iron Elements and Paper Elements",
+    "End-to-end Build Tooling (including Vulcanize)",
+    "Unit testing with Web Component Tester",
+    "Routing with Page.js",
+    "Offline support with the Platinum Service Worker Elements"
+  ]
+}
 </json-data>
 </template>
 </template>
