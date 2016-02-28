@@ -1,1 +1,69 @@
-{"app":{"meta":{"todo":[]},"model":{},"drawerToolbar:span":"メニュー","paperDrawerPanel:paper-scroll-header-panel:paper-menu_1:a:span_1":"ホーム","paperDrawerPanel:paper-scroll-header-panel:paper-menu_1:a_1:span_1":"ユーザー","paperDrawerPanel:paper-scroll-header-panel:paper-menu_1:a_2:span_1":"コンタクト","mainToolbar:div_4:div":"Polymer スターターキット","mainToolbar:div_5:div":"ウェブの未来を、今すぐ","headerPanelMain:div_1:iron-pages:section:paper-material:p_1":"以下の機能が使用可能です:","headerPanelMain:div_1:iron-pages:section:paper-material:p_3":["ウェブアプリのレイアウトをもっとお探しですか？ {1}コレクションをご参照ください。 ライブ{2}もできます。","レイアウト","プレビュー"],"headerPanelMain:div_1:iron-pages:section:paper-material_1:p":"これはもう一つのカードです。","license":"ライセンス","headerPanelMain:div_1:iron-pages:section:paper-material_2:p_1":"Everything in this repo is BSD style license unless otherwise specified.","headerPanelMain:div_1:iron-pages:section:paper-material_2:p_2":"Copyright (c) 2015 The Polymer Authors. All rights reserved.","headerPanelMain:div_1:iron-pages:section:paper-material_2:p_3":"Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:","headerPanelMain:div_1:iron-pages:section:paper-material_2:ul_4:li":"Redistributions of source code must retain the above copyright\n                notice, this list of conditions and the following disclaimer.","headerPanelMain:div_1:iron-pages:section:paper-material_2:ul_4:li_1":"Redistributions in binary form must reproduce the above\n                copyright notice, this list of conditions and the following disclaimer\n                in the documentation and/or other materials provided with the\n                distribution.","headerPanelMain:div_1:iron-pages:section:paper-material_2:ul_4:li_2":"Neither the name of Google Inc. nor the names of its\n                contributors may be used to endorse or promote products derived from\n                this software without specific prior written permission.","headerPanelMain:div_1:iron-pages:section:paper-material_2:p_5":"THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.","headerPanelMain:div_1:iron-pages:section_1:paper-material:h2":"ユーザー","headerPanelMain:div_1:iron-pages:section_1:paper-material:p_1":"ユーザーセクションです","headerPanelMain:div_1:iron-pages:section_1:paper-material:a_2":"アディ","headerPanelMain:div_1:iron-pages:section_1:paper-material:a_4":"ロブ","headerPanelMain:div_1:iron-pages:section_1:paper-material:a_6":"チャック","headerPanelMain:div_1:iron-pages:section_1:paper-material:a_8":"サム","headerPanelMain:div_1:iron-pages:section_2:paper-material:h2":["ユーザー: {1}","{{params.name}}"],"headerPanelMain:div_1:iron-pages:section_2:paper-material:div_1":["{1} のセクションです。","{{params.name}}"],"headerPanelMain:div_1:iron-pages:section_3:paper-material:h2":"コンタクト","headerPanelMain:div_1:iron-pages:section_3:paper-material:p_1":"コンタクトセクションです。","toast:span":"Ok"},"my-greeting":{"meta":{"todo":[]},"model":{},"span_2":"テキストを更新して挨拶を変更できます。","welcome":"ようこそ！"},"my-list":{"meta":{"todo":[]},"model":{},"items":["レスポンシブウェブアプリのボイラプレート","Iron カスタム要素 と Paper カスタム要素","エンド・ツー・エンド 構築ツール群 (Vulcanize を含む)","Web Component Tester によるユニット・テスト","Page.js によるルーティング","Platinum サービスワーカー要素によるオフライン環境のサポート"]},"bundle":true}
+{
+  "app": {
+    "meta": {
+      "todo": []
+    },
+    "model": {},
+    "drawerToolbar:span": "メニュー",
+    "paperDrawerPanel:paper-scroll-header-panel:paper-menu_1:a:span_1": "ホーム",
+    "paperDrawerPanel:paper-scroll-header-panel:paper-menu_1:a_1:span_1": "ユーザー",
+    "paperDrawerPanel:paper-scroll-header-panel:paper-menu_1:a_2:span_1": "コンタクト",
+    "mainToolbar:div_4:div": "Polymer スターターキット",
+    "mainToolbar:div_5:div": "ウェブの未来を、今すぐ",
+    "headerPanelMain:div_1:iron-pages:section:paper-material:p_1": "以下の機能が使用可能です:",
+    "headerPanelMain:div_1:iron-pages:section:paper-material:p_3": [
+      "ウェブアプリのレイアウトをもっとお探しですか？ {1}コレクションをご参照ください。 ライブ{2}もできます。",
+      "レイアウト",
+      "プレビュー"
+    ],
+    "headerPanelMain:div_1:iron-pages:section:paper-material_1:p": "これはもう一つのカードです。",
+    "license": "ライセンス",
+    "headerPanelMain:div_1:iron-pages:section:paper-material_2:p_1": "Everything in this repo is BSD style license unless otherwise specified.",
+    "headerPanelMain:div_1:iron-pages:section:paper-material_2:p_2": "Copyright (c) 2015 The Polymer Authors. All rights reserved.",
+    "headerPanelMain:div_1:iron-pages:section:paper-material_2:p_3": "Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:",
+    "headerPanelMain:div_1:iron-pages:section:paper-material_2:ul_4:li": "Redistributions of source code must retain the above copyright\n                notice, this list of conditions and the following disclaimer.",
+    "headerPanelMain:div_1:iron-pages:section:paper-material_2:ul_4:li_1": "Redistributions in binary form must reproduce the above\n                copyright notice, this list of conditions and the following disclaimer\n                in the documentation and/or other materials provided with the\n                distribution.",
+    "headerPanelMain:div_1:iron-pages:section:paper-material_2:ul_4:li_2": "Neither the name of Google Inc. nor the names of its\n                contributors may be used to endorse or promote products derived from\n                this software without specific prior written permission.",
+    "headerPanelMain:div_1:iron-pages:section:paper-material_2:p_5": "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.",
+    "headerPanelMain:div_1:iron-pages:section_1:paper-material:h2": "ユーザー",
+    "headerPanelMain:div_1:iron-pages:section_1:paper-material:p_1": "ユーザーセクションです",
+    "headerPanelMain:div_1:iron-pages:section_1:paper-material:a_2": "アディ",
+    "headerPanelMain:div_1:iron-pages:section_1:paper-material:a_4": "ロブ",
+    "headerPanelMain:div_1:iron-pages:section_1:paper-material:a_6": "チャック",
+    "headerPanelMain:div_1:iron-pages:section_1:paper-material:a_8": "サム",
+    "headerPanelMain:div_1:iron-pages:section_2:paper-material:h2": [
+      "ユーザー: {1}",
+      "{{params.name}}"
+    ],
+    "headerPanelMain:div_1:iron-pages:section_2:paper-material:div_1": [
+      "{1} のセクションです。",
+      "{{params.name}}"
+    ],
+    "headerPanelMain:div_1:iron-pages:section_3:paper-material:h2": "コンタクト",
+    "headerPanelMain:div_1:iron-pages:section_3:paper-material:p_1": "コンタクトセクションです。",
+    "toast:span": "Ok"
+  },
+  "my-greeting": {
+    "meta": {
+      "todo": []
+    },
+    "model": {},
+    "span_2": "テキストを更新して挨拶を変更できます。",
+    "welcome": "ようこそ！"
+  },
+  "my-list": {
+    "meta": {
+      "todo": []
+    },
+    "model": {},
+    "items": [
+      "レスポンシブウェブアプリのボイラプレート",
+      "Iron カスタム要素 と Paper カスタム要素",
+      "エンド・ツー・エンド 構築ツール群 (Vulcanize を含む)",
+      "Web Component Tester によるユニット・テスト",
+      "Page.js によるルーティング",
+      "Platinum サービスワーカー要素によるオフライン環境のサポート"
+    ]
+  },
+  "bundle": true
+}
