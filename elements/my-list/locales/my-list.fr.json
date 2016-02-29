@@ -1,14 +1,1 @@
-{
-  "meta": {
-    "todo": []
-  },
-  "model": {},
-  "items": [
-    "fr Responsive Web App boilerplate",
-    "fr Iron Elements and Paper Elements",
-    "fr End-to-end Build Tooling (including Vulcanize)",
-    "fr Unit testing with Web Component Tester",
-    "fr Routing with Page.js",
-    "fr Offline support with the Platinum Service Worker Elements"
-  ]
-}
+{"meta":{"todo":[]},"model":{},"items":["fr Responsive Web App boilerplate","fr Iron Elements and Paper Elements","fr End-to-end Build Tooling (including Vulcanize)","fr Unit testing with Web Component Tester","fr Routing with Page.js","fr Offline support with the Platinum Service Worker Elements"]}
