@@ -1,4 +1,21 @@
 <html><head><!--
+@license https://github.com/t2ym/i18n-behavior/blob/master/LICENSE.md
+Copyright (c) 2016, Tetsuya Mori <t2y3141592@gmail.com>. All rights reserved.
+--><!--
+@license https://github.com/t2ym/i18n-format/blob/master/LICENSE.md
+Copyright (c) 2016, Tetsuya Mori <t2y3141592@gmail.com>. All rights reserved.
+--><!--
+@license https://github.com/t2ym/i18n-number/blob/master/LICENSE.md
+Copyright (c) 2016, Tetsuya Mori <t2y3141592@gmail.com>. All rights reserved.
+--><!--
+@license
+Copyright (c) 2014 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+--><!--
 @license
 Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
 This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
@@ -655,7 +672,7 @@ return value != null ? value : undefined;
 }
 }
 });
-Polymer.version = '1.3.0';
+Polymer.version = '1.3.1';
 Polymer.Base._addFeature({
 _registerFeatures: function () {
 this._prepIs();
@@ -5672,7 +5689,8 @@ this._encapsulateStyle = !nativeShadow && Boolean(this._template);
 if (this._template) {
 this._styles = this._collectStyles();
 var cssText = styleTransformer.elementStyles(this);
-var needsStatic = this._needsStaticStyles(this._styles);
+this._prepStyleProperties();
+var needsStatic = this._styles.length && !this._needsStyleProperties();
 if (needsStatic || !nativeShadow) {
 cssText = needsStatic ? cssText : ' ';
 var style = styleUtil.applyCss(cssText, this.is, nativeShadow ? this._template.content : null);
@@ -5812,9 +5830,10 @@ return any;
 }
 },
 collectCssText: function (rule) {
-var cssText = rule.parsedCssText;
-cssText = cssText.replace(this.rx.BRACKETED, '').replace(this.rx.VAR_ASSIGN, '');
-return cssText;
+return this.collectConsumingCssText(rule.parsedCssText);
+},
+collectConsumingCssText: function (cssText) {
+return cssText.replace(this.rx.BRACKETED, '').replace(this.rx.VAR_ASSIGN, '');
 },
 collectPropertiesInCssText: function (cssText, props) {
 var m;
@@ -5969,7 +5988,7 @@ self._scopeSelector(rule, hostRx, hostSelector, element._scopeCssViaAttr, scopeS
 _elementKeyframeTransforms: function (element, scopeSelector) {
 var keyframesRules = element._styles._keyframes;
 var keyframeTransforms = {};
-if (!nativeShadow) {
+if (!nativeShadow && keyframesRules) {
 for (var i = 0, keyframesRule = keyframesRules[i]; i < keyframesRules.length; keyframesRule = keyframesRules[++i]) {
 this._scopeKeyframes(keyframesRule, scopeSelector);
 keyframeTransforms[keyframesRule.keyframesName] = this._keyframesRuleTransformer(keyframesRule);
@@ -6158,24 +6177,12 @@ return api;
 'use strict';
 var serializeValueToAttribute = Polymer.Base.serializeValueToAttribute;
 var propertyUtils = Polymer.StyleProperties;
-var styleUtil = Polymer.StyleUtil;
 var styleTransformer = Polymer.StyleTransformer;
 var styleDefaults = Polymer.StyleDefaults;
 var nativeShadow = Polymer.Settings.useNativeShadow;
 Polymer.Base._addFeature({
-_needsStaticStyles: function (styles) {
-var needsStatic;
-for (var i = 0, l = styles.length, css; i < l; i++) {
-css = styleUtil.parser._clean(styles[i].textContent);
-needsStatic = needsStatic || Boolean(css);
-if (css.match(propertyUtils.rx.MIXIN_MATCH) || css.match(propertyUtils.rx.VAR_MATCH)) {
-return false;
-}
-}
-return needsStatic;
-},
 _prepStyleProperties: function () {
-this._ownStylePropertyNames = this._styles ? propertyUtils.decorateStyles(this._styles) : null;
+this._ownStylePropertyNames = this._styles && this._styles.length ? propertyUtils.decorateStyles(this._styles) : null;
 },
 customStyle: null,
 getComputedStyleValue: function (property) {
@@ -6334,7 +6341,6 @@ this._prepIs();
 this._prepConstructor();
 this._prepTemplate();
 this._prepStyles();
-this._prepStyleProperties();
 this._prepAnnotations();
 this._prepEffects();
 this._prepBehaviors();
@@ -7530,7 +7536,13 @@ _template: null,
 created: function () {
 var self = this;
 Polymer.RenderStatus.whenReady(function () {
+if (document.readyState == 'loading') {
+document.addEventListener('DOMContentLoaded', function () {
 self._markImportsReady();
+});
+} else {
+self._markImportsReady();
+}
 });
 },
 _ensureReady: function () {
@@ -8249,7 +8261,8 @@ this.fire('dom-change');
          * @type {!Polymer.IronMeta}
          */
         _meta: {
-          value: Polymer.Base.create('iron-meta', {type: 'iconset'})
+          value: Polymer.Base.create('iron-meta', {type: 'iconset'}),
+          observer: '_updateIcon'
         }
 
       },
@@ -8274,7 +8287,14 @@ this.fire('dom-change');
       /** @suppress {visibility} */
       _updateIcon: function() {
         if (this._usesIconset()) {
-          if (this._iconsetName) {
+          if (this._img && this._img.parentNode) {
+            Polymer.dom(this.root).removeChild(this._img);
+          }
+          if (this._iconName === "") {
+            if (this._iconset) {
+              this._iconset.removeIcon(this);
+            }
+          } else if (this._iconsetName && this._meta) {
             this._iconset = /** @type {?Polymer.Iconset} */ (
               this._meta.byKey(this._iconsetName));
             if (this._iconset) {
@@ -8285,6 +8305,9 @@ this.fire('dom-change');
             }
           }
         } else {
+          if (this._iconset) {
+            this._iconset.removeIcon(this);
+          }
           if (!this._img) {
             this._img = document.createElement('img');
             this._img.style.width = '100%';
@@ -9859,6 +9882,8 @@ this.fire('dom-change');
       }
 
       .left-drawer.narrow-layout > #drawer:not(.iron-selected) {
+        visibility: hidden;
+
         -webkit-transform: translateX(-100%);
         transform: translateX(-100%);
       }
@@ -9871,8 +9896,10 @@ this.fire('dom-change');
         transform: translateX(100%);
       }
 
-      .right-drawer.narrow-layout.dragging > #drawer:not(.iron-selected),
-      .right-drawer.narrow-layout.peeking > #drawer:not(.iron-selected) {
+      .left-drawer.dragging > #drawer:not(.iron-selected),
+      .left-drawer.peeking > #drawer:not(.iron-selected),
+      .right-drawer.dragging > #drawer:not(.iron-selected),
+      .right-drawer.peeking > #drawer:not(.iron-selected) {
         visibility: visible;
       }
 
@@ -9901,7 +9928,7 @@ this.fire('dom-change');
         box-sizing: border-box;
       }
 
-      iron-selector:not(.narrow-layout) #main ::content [paper-drawer-toggle] {
+      iron-selector:not(.narrow-layout) ::content [paper-drawer-toggle] {
         display: none;
       }
     </style>
@@ -9911,13 +9938,13 @@ this.fire('dom-change');
 
     <iron-selector attr-for-selected="id" class$="[[_computeIronSelectorClass(narrow, _transition, dragging, rightDrawer, peeking)]]" activate-event="" selected="[[selected]]">
 
-      <div id="main" style$="[[_computeMainStyle(narrow, rightDrawer, drawerWidth)]]" on-transitionend="_onMainTransitionEnd">
+      <div id="main" style$="[[_computeMainStyle(narrow, rightDrawer, drawerWidth)]]">
         <content select="[main]"></content>
         <div id="scrim" on-tap="closeDrawer"></div>
       </div>
 
       <div id="drawer" style$="[[_computeDrawerStyle(drawerWidth)]]">
-        <content select="[drawer]"></content>
+        <content id="drawerContent" select="[drawer]"></content>
       </div>
 
     </iron-selector>
@@ -10115,6 +10142,25 @@ this.fire('dom-change');
           },
 
           /**
+           * The CSS selector for the element that should receive focus when the drawer is open.
+           * By default, when the drawer opens, it focuses the first tabbable element. That is,
+           * the first element that can receive focus.
+           */
+          drawerFocusSelector: {
+            type: String,
+            value:
+                'a[href]:not([tabindex="-1"]),'+
+                'area[href]:not([tabindex="-1"]),'+
+                'input:not([disabled]):not([tabindex="-1"]),'+
+                'select:not([disabled]):not([tabindex="-1"]),'+
+                'textarea:not([disabled]):not([tabindex="-1"]),'+
+                'button:not([disabled]):not([tabindex="-1"]),'+
+                'iframe:not([tabindex="-1"]),'+
+                '[tabindex]:not([tabindex="-1"]),'+
+                '[contentEditable=true]:not([tabindex="-1"])'
+          },
+
+          /**
            * Whether the transition is enabled.
            */
           _transition: {
@@ -10128,12 +10174,21 @@ this.fire('dom-change');
           tap: '_onTap',
           track: '_onTrack',
           down: '_downHandler',
-          up: '_upHandler'
+          up: '_upHandler',
+          transitionend: '_onTransitionEnd'
         },
 
         observers: [
-          '_forceNarrowChanged(forceNarrow, defaultSelected)'
+          '_forceNarrowChanged(forceNarrow, defaultSelected)',
+          '_toggleFocusListener(selected)'
         ],
+
+        ready: function() {
+          // Avoid transition at the beginning e.g. page loads and enable
+          // transitions only after the element is rendered and ready.
+          this._transition = true;
+          this._boundFocusListener = this._didFocus.bind(this);
+        },
 
         /**
          * Toggles the panel open and closed.
@@ -10166,15 +10221,18 @@ this.fire('dom-change');
           this.selected = 'main';
         },
 
-        ready: function() {
-          // Avoid transition at the beginning e.g. page loads and enable
-          // transitions only after the element is rendered and ready.
-          this._transition = true;
-        },
-
-        _onMainTransitionEnd: function (e) {
-          if (e.currentTarget === this.$.main && (e.propertyName === 'left' || e.propertyName === 'right')) {
+        _onTransitionEnd: function (e) {
+          var target = Polymer.dom(e).localTarget;
+          if (target !== this) {
+            // ignore events coming from the light dom
+            return;
+          }
+          if (e.propertyName === 'left' || e.propertyName === 'right') {
             this.notifyResize();
+          }
+          if (e.propertyName === 'transform' && this.selected === 'drawer') {
+            var focusedChild = this._getAutoFocusedNode();
+            focusedChild && focusedChild.focus();
           }
         },
 
@@ -10228,15 +10286,12 @@ this.fire('dom-change');
               this._trackEnd(event);
               break;
           }
-
         },
 
         _responsiveChange: function(narrow) {
           this._setNarrow(narrow);
 
-          if (this.narrow) {
-            this.selected = this.defaultSelected;
-          }
+          this.selected = this.narrow ? this.defaultSelected : null;
 
           this.setScrollDirection(this._swipeAllowed() ? 'y' : 'all');
           this.fire('paper-responsive-change', {narrow: this.narrow});
@@ -10372,16 +10427,51 @@ this.fire('dom-change');
           if (translateX === null) {
             return '';
           }
-
           return this.hasWillChange ? 'translateX(' + translateX + 'px)' :
               'translate3d(' + translateX + 'px, 0, 0)';
         },
 
         _moveDrawer: function(translateX) {
           this.transform(this._transformForTranslateX(translateX), this.$.drawer);
-        }
+        },
 
+        _getDrawerContent: function() {
+          return Polymer.dom(this.$.drawerContent).getDistributedNodes()[0];
+        },
+
+        _getAutoFocusedNode: function() {
+          var drawerContent = this._getDrawerContent();
+          return Polymer.dom(drawerContent).querySelector(this.drawerFocusSelector) || drawerContent;
+        },
+
+        _toggleFocusListener: function(selected) {
+          if (selected === 'drawer') {
+            document.addEventListener('focus', this._boundFocusListener, true);
+          } else {
+            document.removeEventListener('focus', this._boundFocusListener, true);
+          }
+        },
+
+        _didFocus: function(event) {
+          var path = Polymer.dom(event).path;
+          var focusedChild = path[0];
+          var drawerContent = this._getDrawerContent();
+          var focusedChildCameFromDrawer = false;
+          var autoFocusedNode = this._getAutoFocusedNode();
+
+          while (!focusedChildCameFromDrawer && path[0] && path[0].hasAttribute) {
+            focusedChildCameFromDrawer = path.shift() === drawerContent;
+          }
+          if (!focusedChildCameFromDrawer && autoFocusedNode) {
+            autoFocusedNode.focus();
+          }
+        },
+
+        _isDrawerClosed: function(narrow, selected) {
+          return !narrow || selected !== 'drawer';
+        }
       });
+
     }());
   </script>
 </dom-module>
@@ -12994,7 +13084,8 @@ this.fire('dom-change');
 
       // Do not focus the selected tab if the deepest target is part of the
       // menu element's local DOM and is focusable.
-      var rootTarget = Polymer.dom(event).rootTarget;
+      var rootTarget = /** @type {?HTMLElement} */(
+          Polymer.dom(event).rootTarget);
       if (rootTarget !== this && typeof rootTarget.tabIndex !== "undefined" && !this.isLightDescendant(rootTarget)) {
         return;
       }
@@ -15746,7 +15837,7 @@ if (!window.Promise) {
 }
 </script>
 <script>
-  'use strict'
+  'use strict';
 
   Polymer({
     is: 'iron-request',
@@ -15897,6 +15988,9 @@ if (!window.Promise) {
 
     /**
      * Sends an HTTP request to the server and returns the XHR object.
+     *
+     * The handling of the `body` parameter will vary based on the Content-Type
+     * header. See the docs for iron-ajax's `body` param for details.
      *
      * @param {{
      *   url: string,
@@ -16160,7 +16254,6 @@ if (!window.Promise) {
   });
 </script>
 
-
 <script>
   'use strict';
 
@@ -16245,6 +16338,8 @@ if (!window.Promise) {
        * Content type to use when sending data. If the `contentType` property
        * is set and a `Content-Type` header is specified in the `headers`
        * property, the `headers` property value will take precedence.
+       *
+       * Varies the handling of the `body` param.
        */
       contentType: {
         type: String,
@@ -16423,6 +16518,16 @@ if (!window.Promise) {
         value: ''
       },
 
+      /**
+       * By default, these events do not bubble largely because the `error` event has special
+       * meaning in the window object. Setting this attribute will cause iron-ajax's request,
+       * response, and error events to bubble to the window object.
+       */
+      bubbles: {
+        type: Boolean,
+        value: false
+      },
+
       _boundHandleResponse: {
         type: Function,
         value: function() {
@@ -16564,7 +16669,7 @@ if (!window.Promise) {
       this.fire('request', {
         request: request,
         options: requestOptions
-      }, {bubbles: false});
+      }, {bubbles: this.bubbles});
 
       return request;
     },
@@ -16575,7 +16680,7 @@ if (!window.Promise) {
         this._setLastError(null);
         this._setLoading(false);
       }
-      this.fire('response', request, {bubbles: false});
+      this.fire('response', request, {bubbles: this.bubbles});
     },
 
     _handleError: function(request, error) {
@@ -16594,7 +16699,7 @@ if (!window.Promise) {
       this.fire('error', {
         request: request,
         error: error
-      }, {bubbles: false});
+      }, {bubbles: this.bubbles});
     },
 
     _discardRequest: function(request) {
@@ -17993,6 +18098,7 @@ Polymer({
     <template id="standard">
       
       <input placeholder="">
+      <any-elements title=""></any-elements>
 
       
       <paper-input label="" error-message="" placeholder=""></paper-input>
@@ -18000,6 +18106,7 @@ Polymer({
       <paper-dropdown-menu label=""></paper-dropdown-menu>
       <paper-toast text=""></paper-toast>
       <google-chart options="" cols="" rows="" data=""></google-chart>
+      <google-signin label-signin="" label-signout="" label-additional=""></google-signin>
       <platinum-push-messaging title="" message=""></platinum-push-messaging>
 
       
@@ -18027,6 +18134,10 @@ Polymer({
       if (this.data[element]) {
         return  !!this.data[element]['any-attributes'] ||
                 !!this.data[element][attr];
+      }
+      else if (this.data['any-elements'] &&
+               this.data['any-elements'][attr]) {
+        return true;
       }
       else {
         return false;
@@ -18156,11 +18267,13 @@ Polymer({
   });
 
   // debug log when <html debug> attribute exists
-  function debuglog (arg) {
-    if (html.hasAttribute('debug')) {
-      console.log(arg);
-    }
-  }
+  var debuglog = html.hasAttribute('debug') ?
+    function (arg) {
+      if (htmlDebug) {
+        console.log(arg);
+      }
+    } :
+    function () {}
 
   window.BehaviorsStore = window.BehaviorsStore || {};
   /**
@@ -19238,54 +19351,41 @@ Polymer({
       else {
         this.templateDefaultLang = 'en';
       }
-      if (!template) {
-        return false;
-      }
-      var bundle = {};
+      var bundle = { model: {} };
       var path = [];
       var templateDefaultLang = this.templateDefaultLang;
       var localizableText, jsonData;
 
-      // register localizable attributes of the element itself
-      attributesRepository.registerLocalizableAttributes(id, template);
-
-      if (template.getAttribute('localizable-text') === 'embedded') {
-        // pick up embedded JSON from the template
-        localizableText = template.content.querySelector('#localizable-text');
-        if (localizableText) {
-          jsonData = localizableText.content.querySelector('json-data');
-          if (jsonData) {
-            bundle = JSON.parse(jsonData.textContent);
+      if (template) {
+        // register localizable attributes of the element itself
+        attributesRepository.registerLocalizableAttributes(id, template);
+        if (template.getAttribute('localizable-text') === 'embedded') {
+          // pick up embedded JSON from the template
+          localizableText = template.content.querySelector('#localizable-text');
+          if (localizableText) {
+            jsonData = localizableText.content.querySelector('json-data');
+            if (jsonData) {
+              bundle = JSON.parse(jsonData.textContent);
+            }
+            else {
+              console.error('<json-data> not found in <template id=\"localizable-text\">');
+            }
           }
           else {
-            console.error('<json-data> not found in <template id=\"localizable-text\">');
+            console.error('<template id=\"localizable-text\"> not found');
           }
         }
         else {
-          console.error('<template id=\"localizable-text\"> not found');
+          // traverse template to generate bundle
+          this._traverseTemplateTree(template.content, path, bundle, 0);
         }
       }
-      else {
-        // traverse template to generate bundle
-        this._traverseTemplateTree(template.content, path, bundle, 0);
-      }
-      //console.log('template = ');
-      //console.log(template);
 
-      if (bundle.model) {
-        bundles[''][id] = bundle;
-        bundles[templateDefaultLang] = bundles[templateDefaultLang] || {};
-        bundles[templateDefaultLang][id] = bundle;
-      }
-      else {
-        // TODO: handle default language fetching
-        this._fetchLanguage('');
-      }
-
-      // merge default text into bundle
-      this._mergeDefaultText(bundle);
+      bundles[''][id] = bundle;
+      bundles[templateDefaultLang] = bundles[templateDefaultLang] || {};
+      bundles[templateDefaultLang][id] = bundle;
       //console.log('text = ');
-      //console.log(bundle);
+      //console.log(JSON.stringify(bundle, null, 2));
 
       return true;
     },
@@ -19350,6 +19450,7 @@ Polymer({
               case 'object':
                 // put into model
                 attrId = ['model', messageId, attribute.name].join('.');
+                debuglog(attrId + ' = ' + text);
                 this._setBundleValue(bundle, attrId, value);
                 attribute.value = '{{' + attrId + '}}';
                 break;
@@ -19366,6 +19467,7 @@ Polymer({
             // string attribute
             messageId = this._generateMessageId(path, id);
             attrId = ['model', messageId, attribute.name].join('.');
+            debuglog(attrId + ' = ' + text);
             this._setBundleValue(bundle, attrId, text);
             attribute.value = '{{' + attrId + '}}';
           }
@@ -19681,27 +19783,84 @@ Polymer({
             // check if i18n-format is applicable
             var childStatus = Array.prototype.map.call(
               node.childNodes, function (child) {
-                return {
-                  hasText: child.nodeType === child.TEXT_NODE && 
-                           child.textContent.length > 0 && 
-                           !child.textContent.match(/^\s*$/g), 
-                  hasCompoundAnnotatedText: child.nodeType === child.TEXT_NODE &&
-                                            this._isCompoundAnnotatedText(child.textContent),
-                  hasTextChild: child.nodeType === child.ELEMENT_NODE &&
-                                child.childElementCount === 0, // including <br>
-                  hasCompoundAnnotatedChildNode: child.nodeType === child.ELEMENT_NODE &&
-                                                 child.childElementCount === 0 &&
-                                                 this._isCompoundAnnotatedText(child.textContent),
-                  hasGrandChildren: child.nodeType === child.ELEMENT_NODE &&
-                                    Array.prototype.map.call(
-                                      child.childNodes, 
-                                      function (grandChild) {
-                                        return grandChild.nodeType !== grandChild.TEXT_NODE;
-                                      }
-                                    ).reduce(function (prev, current) {
-                                      return prev || current;
-                                    }, false)
-                };
+                var result;
+                if (child.nodeType === child.ELEMENT_NODE &&
+                    child.tagName === 'TEMPLATE') {
+                  var templateNonCommentChildNodes =
+                    Array.prototype.filter.call(child.content.childNodes, function (templateChild) {
+                      switch (templateChild.nodeType) {
+                      case templateChild.COMMENT_NODE:
+                        return false;
+                      case templateChild.TEXT_NODE:
+                        return !templateChild.textContent.match(/^\s*$/g);
+                      default:
+                      case templateChild.ELEMENT_NODE:
+                        return true;
+                      }
+                    });
+                  var firstChild = templateNonCommentChildNodes.shift();
+                  // Examples:
+                  // hasText: <template>text</template>
+                  // hasCompoundAnnotatedText: <template>{{item.name}} text</template>
+                  // hasTextChild: <template><b>text</b></template> or <template><br></template>
+                  // hasCompoundAnnotatedChildNode: <template><b>{{item.name}} text</b></template>
+                  // hasGrandChildren: <template><span><b>text</b></span></template> or 
+                  //                   <template><b>A</b><i>B</i></template> or
+                  //                   hasCompoundAnnotatedText
+                  result = {
+                    hasText: templateNonCommentChildNodes.length === 0 &&
+                             firstChild &&
+                             firstChild.nodeType === firstChild.TEXT_NODE &&
+                             firstChild.textContent.length > 0 &&
+                             !firstChild.textContent.match(/^\s*$/g),
+                    hasCompoundAnnotatedText: firstChild &&
+                                              firstChild.nodeType === firstChild.TEXT_NODE &&
+                                              this._isCompoundAnnotatedText(firstChild.textContent),
+                    hasTextChild: templateNonCommentChildNodes.length === 0 &&
+                                  firstChild.nodeType === child.ELEMENT_NODE &&
+                                  firstChild.childElementCount === 0, // including <br>
+                    hasCompoundAnnotatedChildNode: firstChild.nodeType === firstChild.ELEMENT_NODE &&
+                                                   firstChild.childElementCount === 0 &&
+                                                   this._isCompoundAnnotatedText(firstChild.textContent),
+                    hasGrandChildren: templateNonCommentChildNodes.length > 0 ||
+                                      (firstChild.nodeType === firstChild.ELEMENT_NODE &&
+                                        Array.prototype.map.call(
+                                          firstChild.childNodes,
+                                          function (grandChild) {
+                                            return grandChild.nodeType !== grandChild.TEXT_NODE;
+                                          }
+                                        ).reduce(function (prev, current) {
+                                          return prev || current;
+                                        }, false)) ||
+                                      (firstChild &&
+                                       firstChild.nodeType === firstChild.TEXT_NODE &&
+                                       this._isCompoundAnnotatedText(firstChild.textContent))
+                  };
+                }
+                else {
+                  result = {
+                    hasText: child.nodeType === child.TEXT_NODE &&
+                             child.textContent.length > 0 &&
+                             !child.textContent.match(/^\s*$/g),
+                    hasCompoundAnnotatedText: child.nodeType === child.TEXT_NODE &&
+                                              this._isCompoundAnnotatedText(child.textContent),
+                    hasTextChild: child.nodeType === child.ELEMENT_NODE &&
+                                  child.childElementCount === 0, // including <br>
+                    hasCompoundAnnotatedChildNode: child.nodeType === child.ELEMENT_NODE &&
+                                                   child.childElementCount === 0 &&
+                                                   this._isCompoundAnnotatedText(child.textContent),
+                    hasGrandChildren: child.nodeType === child.ELEMENT_NODE &&
+                                      Array.prototype.map.call(
+                                        child.childNodes,
+                                        function (grandChild) {
+                                          return grandChild.nodeType !== grandChild.TEXT_NODE;
+                                        }
+                                      ).reduce(function (prev, current) {
+                                        return prev || current;
+                                      }, false)
+                  };
+                }
+                return result;
               }.bind(this)).reduce(function (prev, current) { 
                 return {
                   hasText: prev.hasText || current.hasText,
@@ -19734,12 +19893,14 @@ Polymer({
               messageId = this._generateMessageId(path, id);
               templateTextParams = Array.prototype.map.call(
                 node.childNodes, function (child) {
+                  var firstChild;
                   if (child.nodeType === child.TEXT_NODE &&
                       this._hasAnnotatedText(child.textContent)) {
                     return this._compoundAnnotationToSpan(child)
                       .map(function (_child) {
                         return {
                           node: _child,
+                          templateNode: null,
                           type: _child.nodeType,
                           text: _child.nodeType === _child.TEXT_NODE ? 
                                   _child.textContent : null,
@@ -19748,9 +19909,32 @@ Polymer({
                         };
                       });
                   }
+                  else if (child.nodeType === child.ELEMENT_NODE &&
+                      child.tagName === 'TEMPLATE') {
+                    firstChild =
+                      Array.prototype.filter.call(child.content.childNodes, function (templateChild) {
+                        switch (templateChild.nodeType) {
+                        case templateChild.COMMENT_NODE:
+                          return false;
+                        case templateChild.TEXT_NODE:
+                          return !templateChild.textContent.match(/^\s*$/g);
+                        default:
+                        case templateChild.ELEMENT_NODE:
+                          return true;
+                        }
+                      }).shift();
+                    return [{
+                      node: firstChild,
+                      templateNode: child,
+                      type: firstChild.nodeType,
+                      text: null,
+                      childTextNode: true
+                    }];
+                  }
                   else {
                     return [{
                       node: child,
+                      templateNode: null,
                       type: child.nodeType,
                       text: child.nodeType === child.TEXT_NODE ? 
                               child.textContent : null,
@@ -19760,6 +19944,7 @@ Polymer({
                   }
                 }.bind(this)).reduce(function (prev, currentList) {
                   var current;
+                  var textContent;
                   for (var i = 0; i < currentList.length; i++) {
                     current = currentList[i];
                     if (current.text) {
@@ -19772,7 +19957,7 @@ Polymer({
                       this._traverseAttributes(current.node, path, bundle);
                       path.pop();
                       if (current.childTextNode) {
-                        var textContent = current.node.textContent;
+                        textContent = current.node.textContent;
                         if (textContent.length === 0) {
                           // tag without textContent
                           prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
@@ -19783,7 +19968,7 @@ Polymer({
                           prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
                           current.node.textContent = ' ';
                         }
-                        else if (textContent.match(/^({{.*}}|\[\[.*\]\])$/)) {
+                        else if (textContent.match(/^[\s]*({{.*}}|\[\[.*\]\])[\s]*$/)) {
                           // tag with annotation
                           prev.text.push(textContent);
                           // textContent is untouched
@@ -19797,7 +19982,39 @@ Polymer({
                         prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
                       }
                       current.node.setAttribute('param', n.toString());
-                      prev.params.push(current.node);
+                      prev.params.push(current.templateNode || current.node);
+                    }
+                    else if (current.type === current.node.TEXT_NODE &&
+                             current.childTextNode) {
+                      // in template node
+                      n++;
+                      prev.text[0] += '{' + n + '}';
+                      textContent = current.node.textContent;
+                      if (textContent.length === 0) {
+                        // template without textContent
+                        prev.text.push('<template>');
+                        current.node.textContent = '';
+                      }
+                      else if (textContent.match(/^\s*$/g)) {
+                        // template with whitespace textContent
+                        prev.text.push('<template>');
+                        current.node.textContent = ' ';
+                      }
+                      else if (textContent.match(/^[\s]*({{.*}}|\[\[.*\]\])[\s]*$/)) {
+                        // tag with annotation
+                        prev.text.push(textContent);
+                        // textContent is untouched
+                      }
+                      else {
+                        prev.text.push(textContent.replace(/^[\s]*[\s]/, ' ').replace(/[\s][\s]*$/, ' '));
+                        current.node.textContent = '{{text.' + messageId + '.' + n + '}}';
+                      }
+                      span = document.createElement('span');
+                      span.setAttribute('param', n.toString());
+                      current.templateNode.content.removeChild(current.node);
+                      span.appendChild(current.node);
+                      current.templateNode.content.appendChild(span);
+                      prev.params.push(current.templateNode);
                     }
                   }
                   return prev;
@@ -21750,7 +21967,8 @@ module.exports = Array.isArray || function (arr) {
     <template>
       <span id="welcome">{{text.welcome}}</span>
     </template>
-  <template id="localizable-text">
+  
+<template id="localizable-text">
 <json-data>
 {"meta":{},"model":{},"span_2":"Update text to change the greeting.","welcome":"Welcome!"}
 </json-data>
@@ -21806,7 +22024,8 @@ module.exports = Array.isArray || function (arr) {
     <template>
       <json-data id="items">{{text.items}}</json-data>
     </template>
-  <template id="localizable-text">
+  
+<template id="localizable-text">
 <json-data>
 {"meta":{},"model":{},"items":["Responsive Web App boilerplate","Iron Elements and Paper Elements","End-to-end Build Tooling (including Vulcanize)","Unit testing with Web Component Tester","Routing with Page.js","Offline support with the Platinum Service Worker Elements"]}
 </json-data>
