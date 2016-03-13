@@ -1,1 +1,1 @@
-{"meta":{"todo":[]},"model":{},"span_2":"テキストを更新して挨拶を変更できます。","welcome":"ようこそ！"}
+{"meta":{"todo":[{"op":"add","path":"/label_2","value":"Update text to change the greeting."}]},"model":{},"label_2":"Update text to change the greeting.","welcome":"ようこそ！","span_2":"テキストを更新して挨拶を変更できます。"}
