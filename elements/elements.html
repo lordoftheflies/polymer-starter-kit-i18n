@@ -46,30 +46,22 @@ addEventListener('DOMContentLoaded', resolve);
 }());
 window.Polymer = {
 Settings: function () {
-var user = window.Polymer || {};
+var settings = window.Polymer || {};
 var parts = location.search.slice(1).split('&');
 for (var i = 0, o; i < parts.length && (o = parts[i]); i++) {
 o = o.split('=');
-o[0] && (user[o[0]] = o[1] || true);
+o[0] && (settings[o[0]] = o[1] || true);
 }
-var wantShadow = user.dom === 'shadow';
-var hasShadow = Boolean(Element.prototype.createShadowRoot);
-var nativeShadow = hasShadow && !window.ShadowDOMPolyfill;
-var useShadow = wantShadow && hasShadow;
-var hasNativeImports = Boolean('import' in document.createElement('link'));
-var useNativeImports = hasNativeImports;
-var useNativeCustomElements = !window.CustomElements || window.CustomElements.useNative;
-var usePolyfillProto = !useNativeCustomElements && !Object.__proto__;
-return {
-wantShadow: wantShadow,
-hasShadow: hasShadow,
-nativeShadow: nativeShadow,
-useShadow: useShadow,
-useNativeShadow: useShadow && nativeShadow,
-useNativeImports: useNativeImports,
-useNativeCustomElements: useNativeCustomElements,
-usePolyfillProto: usePolyfillProto
-};
+settings.wantShadow = settings.dom === 'shadow';
+settings.hasShadow = Boolean(Element.prototype.createShadowRoot);
+settings.nativeShadow = settings.hasShadow && !window.ShadowDOMPolyfill;
+settings.useShadow = settings.wantShadow && settings.hasShadow;
+settings.hasNativeImports = Boolean('import' in document.createElement('link'));
+settings.useNativeImports = settings.hasNativeImports;
+settings.useNativeCustomElements = !window.CustomElements || window.CustomElements.useNative;
+settings.useNativeShadow = settings.useShadow && settings.nativeShadow;
+settings.usePolyfillProto = !settings.useNativeCustomElements && !Object.__proto__;
+return settings;
 }()
 };
 (function () {
@@ -196,6 +188,9 @@ Polymer.RenderStatus._catchFirstRender();
 }
 Polymer.ImportStatus = Polymer.RenderStatus;
 Polymer.ImportStatus.whenLoaded = Polymer.ImportStatus.whenReady;
+(function () {
+'use strict';
+var settings = Polymer.Settings;
 Polymer.Base = {
 __isPolymerInstance__: true,
 _addFeature: function (feature) {
@@ -205,13 +200,30 @@ registerCallback: function () {
 this._desugarBehaviors();
 this._doBehavior('beforeRegister');
 this._registerFeatures();
-this._doBehavior('registered');
+if (!settings.lazyRegister) {
+this.ensureRegisterFinished();
+}
 },
 createdCallback: function () {
+if (!this.__hasRegisterFinished) {
+this._ensureRegisterFinished(this.__proto__);
+}
 Polymer.telemetry.instanceCount++;
 this.root = this;
 this._doBehavior('created');
 this._initFeatures();
+},
+ensureRegisterFinished: function () {
+this._ensureRegisterFinished(this);
+},
+_ensureRegisterFinished: function (proto) {
+if (proto.__hasRegisterFinished !== proto.is) {
+proto.__hasRegisterFinished = proto.is;
+if (proto._finishRegisterFeatures) {
+proto._finishRegisterFeatures();
+}
+proto._doBehavior('registered');
+}
 },
 attachedCallback: function () {
 var self = this;
@@ -291,6 +303,7 @@ Polymer.isInstance = function (obj) {
 return Boolean(obj && obj.__isPolymerInstance__);
 };
 Polymer.telemetry.instanceCount = 0;
+}());
 (function () {
 var modules = {};
 var lcModules = {};
@@ -672,7 +685,7 @@ return value != null ? value : undefined;
 }
 }
 });
-Polymer.version = '1.3.1';
+Polymer.version = '1.4.0';
 Polymer.Base._addFeature({
 _registerFeatures: function () {
 this._prepIs();
@@ -2024,7 +2037,11 @@ get localTarget() {
 return this.event.target;
 },
 get path() {
-return this.event.path;
+var path = this.event.path;
+if (!Array.isArray(path)) {
+path = Array.prototype.slice.call(path);
+}
+return path;
 }
 };
 } else {
@@ -4487,7 +4504,12 @@ if (prop.notify) {
 this._addPropertyEffect(p, 'notify', { event: Polymer.CaseMap.camelToDashCase(p) + '-changed' });
 }
 if (prop.reflectToAttribute) {
-this._addPropertyEffect(p, 'reflect', { attribute: Polymer.CaseMap.camelToDashCase(p) });
+var attr = Polymer.CaseMap.camelToDashCase(p);
+if (attr[0] === '-') {
+this._warn(this._logf('_addPropertyEffects', 'Property ' + p + ' cannot be reflected to attribute ' + attr + ' because "-" is not a valid starting attribute name. Use a lowercase first letter for the property instead.'));
+} else {
+this._addPropertyEffect(p, 'reflect', { attribute: attr });
+}
 }
 if (prop.readOnly) {
 Polymer.Bind.ensurePropertyEffects(this, p);
@@ -4570,6 +4592,9 @@ var part = note.parts[i];
 if (part.signature) {
 this._addAnnotatedComputationEffect(note, part, index);
 } else if (!part.literal) {
+if (note.kind === 'attribute' && note.name[0] === '-') {
+this._warn(this._logf('_addAnnotationEffect', 'Cannot set attribute ' + note.name + ' because "-" is not a valid attribute starting character'));
+} else {
 this._addPropertyEffect(part.model, 'annotation', {
 kind: note.kind,
 index: index,
@@ -4582,6 +4607,7 @@ event: part.event,
 customEvent: part.customEvent,
 negate: part.negate
 });
+}
 }
 }
 },
@@ -5353,19 +5379,29 @@ this.forEachRule(r, styleRuleCallback, keyframesRuleCallback);
 }
 }
 },
-applyCss: function (cssText, moniker, target, afterNode) {
+applyCss: function (cssText, moniker, target, contextNode) {
+var style = this.createScopeStyle(cssText, moniker);
+target = target || document.head;
+var after = contextNode && contextNode.nextSibling || target.firstChild;
+this.__lastHeadApplyNode = style;
+return target.insertBefore(style, after);
+},
+createScopeStyle: function (cssText, moniker) {
 var style = document.createElement('style');
 if (moniker) {
 style.setAttribute('scope', moniker);
 }
 style.textContent = cssText;
-target = target || document.head;
-if (!afterNode) {
-var n$ = target.querySelectorAll('style[scope]');
-afterNode = n$[n$.length - 1];
-}
-target.insertBefore(style, afterNode && afterNode.nextSibling || target.firstChild);
 return style;
+},
+__lastHeadApplyNode: null,
+applyStylePlaceHolder: function (moniker) {
+var placeHolder = document.createComment(' Shady DOM styles for ' + moniker + ' ');
+var after = this.__lastHeadApplyNode ? this.__lastHeadApplyNode.nextSibling : null;
+var scope = document.head;
+scope.insertBefore(placeHolder, after || scope.firstChild);
+this.__lastHeadApplyNode = placeHolder;
+return placeHolder;
 },
 cssFromModules: function (moduleIds, warnIfNotFound) {
 var modules = moduleIds.trim().split(' ');
@@ -5683,20 +5719,20 @@ styleTransformer.element(element, this.is, this._scopeCssViaAttr);
 prepElement.call(this, element);
 },
 _prepStyles: function () {
-if (this._encapsulateStyle === undefined) {
-this._encapsulateStyle = !nativeShadow && Boolean(this._template);
+if (!nativeShadow) {
+this._scopeStyle = styleUtil.applyStylePlaceHolder(this.is);
 }
+},
+_prepShimStyles: function () {
 if (this._template) {
+if (this._encapsulateStyle === undefined) {
+this._encapsulateStyle = !nativeShadow;
+}
 this._styles = this._collectStyles();
 var cssText = styleTransformer.elementStyles(this);
 this._prepStyleProperties();
-var needsStatic = this._styles.length && !this._needsStyleProperties();
-if (needsStatic || !nativeShadow) {
-cssText = needsStatic ? cssText : ' ';
-var style = styleUtil.applyCss(cssText, this.is, nativeShadow ? this._template.content : null);
-if (!nativeShadow) {
-this._scopeStyle = style;
-}
+if (!this._needsStyleProperties() && this._styles.length) {
+styleUtil.applyCss(cssText, this.is, nativeShadow ? this._template.content : null, this._scopeStyle);
 }
 } else {
 this._styles = [];
@@ -6339,8 +6375,11 @@ Polymer.Base._addFeature({
 _registerFeatures: function () {
 this._prepIs();
 this._prepConstructor();
-this._prepTemplate();
 this._prepStyles();
+},
+_finishRegisterFeatures: function () {
+this._prepTemplate();
+this._prepShimStyles();
 this._prepAnnotations();
 this._prepEffects();
 this._prepBehaviors();
@@ -9578,7 +9617,7 @@ this.fire('dom-change');
     },
 
     observers: [
-      '_updateSelected(selectedValues)'
+      '_updateSelected(selectedValues.splices)'
     ],
 
     /**
@@ -10202,6 +10241,9 @@ this.fire('dom-change');
            * The CSS selector for the element that should receive focus when the drawer is open.
            * By default, when the drawer opens, it focuses the first tabbable element. That is,
            * the first element that can receive focus.
+           *
+           * To disable this behavior, you can set `drawerFocusSelector` to `null` or an empty string.
+           *
            */
           drawerFocusSelector: {
             type: String,
@@ -10498,28 +10540,32 @@ this.fire('dom-change');
 
         _getAutoFocusedNode: function() {
           var drawerContent = this._getDrawerContent();
-          return Polymer.dom(drawerContent).querySelector(this.drawerFocusSelector) || drawerContent;
+
+          return this.drawerFocusSelector ? 
+              Polymer.dom(drawerContent).querySelector(this.drawerFocusSelector) || drawerContent : null;
         },
 
         _toggleFocusListener: function(selected) {
           if (selected === 'drawer') {
-            document.addEventListener('focus', this._boundFocusListener, true);
+            this.addEventListener('focus', this._boundFocusListener, true);
           } else {
-            document.removeEventListener('focus', this._boundFocusListener, true);
+            this.removeEventListener('focus', this._boundFocusListener, true);
           }
         },
 
         _didFocus: function(event) {
+          var autoFocusedNode = this._getAutoFocusedNode();
+          if (!autoFocusedNode) {
+            return;
+          }
+
           var path = Polymer.dom(event).path;
           var focusedChild = path[0];
           var drawerContent = this._getDrawerContent();
-          var focusedChildCameFromDrawer = false;
-          var autoFocusedNode = this._getAutoFocusedNode();
+          var focusedChildCameFromDrawer = path.indexOf(drawerContent) !== -1;
 
-          while (!focusedChildCameFromDrawer && path[0]) {
-            focusedChildCameFromDrawer = path.shift() === drawerContent;
-          }
-          if (!focusedChildCameFromDrawer && autoFocusedNode) {
+          if (!focusedChildCameFromDrawer) {
+            event.stopPropagation();
             autoFocusedNode.focus();
           }
         },
@@ -12891,6 +12937,8 @@ this.fire('dom-change');
      * @param {string|number} value the value to select.
      */
     select: function(value) {
+      // Cancel automatically focusing a default item if the menu received focus
+      // through a user action selecting a particular item.
       if (this._defaultFocusAsync) {
         this.cancelAsync(this._defaultFocusAsync);
         this._defaultFocusAsync = null;
@@ -13061,8 +13109,6 @@ this.fire('dom-change');
         return;
       }
 
-      this.blur();
-
       // clear the cached focus item
       this._defaultFocusAsync = this.async(function() {
         // focus the selected item when the menu receives focus, or the first item
@@ -13073,11 +13119,10 @@ this.fire('dom-change');
 
         if (selectedItem) {
           this._setFocusedItem(selectedItem);
-        } else {
+        } else if (this.items[0]) {
           this._setFocusedItem(this.items[0]);
         }
-      // async 1ms to wait for `select` to get called from `_itemActivate`
-      }, 1);
+      });
     },
 
     /**
@@ -14213,199 +14258,340 @@ CSS properties               | Action
   /**
    * @struct
    * @constructor
+   * @private
    */
   Polymer.IronOverlayManagerClass = function() {
+    /**
+     * Used to keep track of the opened overlays.
+     * @private {Array<Element>}
+     */
     this._overlays = [];
-    // Used to keep track of the last focused node before an overlay gets opened.
-    this._lastFocusedNodes = [];
 
     /**
-     * iframes have a default z-index of 100, so this default should be at least
-     * that.
+     * iframes have a default z-index of 100,
+     * so this default should be at least that.
      * @private {number}
      */
     this._minimumZ = 101;
 
-    this._backdrops = [];
-
+    /**
+     * Memoized backdrop element.
+     * @private {Element|null}
+     */
     this._backdropElement = null;
-    Object.defineProperty(this, 'backdropElement', {
-      get: function() {
-        if (!this._backdropElement) {
-          this._backdropElement = document.createElement('iron-overlay-backdrop');
-        }
-        return this._backdropElement;
-      }.bind(this)
-    });
+
+    // Enable document-wide tap recognizer.
+    Polymer.Gestures.add(document, 'tap', null);
+    // We should be using only 'tap', but this would be a breaking change.
+    var tapEvent = ('ontouchstart' in window) ? 'tap' : 'click';
+    document.addEventListener(tapEvent, this._onCaptureClick.bind(this), true);
+    document.addEventListener('focus', this._onCaptureFocus.bind(this), true);
+    document.addEventListener('keydown', this._onCaptureKeyDown.bind(this), true);
+  };
+
+  Polymer.IronOverlayManagerClass.prototype = {
+
+    constructor: Polymer.IronOverlayManagerClass,
+
+    /**
+     * The shared backdrop element.
+     * @type {Element} backdropElement
+     */
+    get backdropElement() {
+      if (!this._backdropElement) {
+        this._backdropElement = document.createElement('iron-overlay-backdrop');
+      }
+      return this._backdropElement;
+    },
 
     /**
      * The deepest active element.
-     * returns {?Node} element the active element
+     * @type {Element} activeElement the active element
      */
-    this.deepActiveElement = null;
-    Object.defineProperty(this, 'deepActiveElement', {
-      get: function() {
-        var active = document.activeElement;
-        // document.activeElement can be null
-        // https://developer.mozilla.org/en-US/docs/Web/API/Document/activeElement
-        while (active && active.root && Polymer.dom(active.root).activeElement) {
-          active = Polymer.dom(active.root).activeElement;
-        }
-        return active;
-      }.bind(this)
-    });
-  };
-
-  /**
-   * If a node is contained in an overlay.
-   * @private
-   * @param {Node} node
-   * @returns {Boolean}
-   */
-  Polymer.IronOverlayManagerClass.prototype._isChildOfOverlay = function(node) {
-    while (node && node !== document.body) {
-      // Use logical parentNode, or native ShadowRoot host.
-      node = Polymer.dom(node).parentNode || node.host;
-      // Check if it is an overlay.
-      if (node && node.behaviors && node.behaviors.indexOf(Polymer.IronOverlayBehaviorImpl) !== -1) {
-        return true;
+    get deepActiveElement() {
+      // document.activeElement can be null
+      // https://developer.mozilla.org/en-US/docs/Web/API/Document/activeElement
+      // In case of null, default it to document.body.
+      var active = document.activeElement || document.body;
+      while (active.root && Polymer.dom(active.root).activeElement) {
+        active = Polymer.dom(active.root).activeElement;
       }
-    }
-    return false;
-  };
+      return active;
+    },
 
-  Polymer.IronOverlayManagerClass.prototype._applyOverlayZ = function(overlay, aboveZ) {
-    this._setZ(overlay, aboveZ + 2);
-  };
+    /**
+     * Brings the overlay at the specified index to the front.
+     * @param {number} i
+     * @private
+     */
+    _bringOverlayAtIndexToFront: function(i) {
+      var overlay = this._overlays[i];
+      var lastI = this._overlays.length - 1;
+      // If already the top element, return.
+      if (!overlay || i === lastI) {
+        return;
+      }
+      // Update z-index to be on top.
+      var minimumZ = Math.max(this.currentOverlayZ(), this._minimumZ);
+      if (this._getZ(overlay) <= minimumZ) {
+        this._applyOverlayZ(overlay, minimumZ);
+      }
 
-  Polymer.IronOverlayManagerClass.prototype._setZ = function(element, z) {
-    element.style.zIndex = z;
-  };
+      // Shift other overlays behind the new on top.
+      while (i < lastI) {
+        this._overlays[i] = this._overlays[i + 1];
+        i++;
+      }
+      this._overlays[lastI] = overlay;
+    },
 
-  /**
-   * track overlays for z-index and focus managemant
-   */
-  Polymer.IronOverlayManagerClass.prototype.addOverlay = function(overlay) {
-    var minimumZ = Math.max(this.currentOverlayZ(), this._minimumZ);
-    this._overlays.push(overlay);
-    var newZ = this.currentOverlayZ();
-    if (newZ <= minimumZ) {
-      this._applyOverlayZ(overlay, minimumZ);
-    }
-    var element = this.deepActiveElement;
-    // If already in other overlay, don't reset focus there.
-    if (this._isChildOfOverlay(element)) {
-      element = null;
-    }
-    this._lastFocusedNodes.push(element);
-  };
+    /**
+     * Adds the overlay and updates its z-index if it's opened, or removes it if it's closed.
+     * Also updates the backdrop z-index.
+     * @param {Element} overlay
+     */
+    addOrRemoveOverlay: function(overlay) {
+      if (overlay.opened) {
+        this.addOverlay(overlay);
+      } else {
+        this.removeOverlay(overlay);
+      }
+      this.trackBackdrop();
+    },
 
-  Polymer.IronOverlayManagerClass.prototype.removeOverlay = function(overlay) {
-    var i = this._overlays.indexOf(overlay);
-    if (i >= 0) {
+    /**
+     * Tracks overlays for z-index and focus management.
+     * @param {Element} overlay
+     */
+    addOverlay: function(overlay) {
+      var i = this._overlays.indexOf(overlay);
+      if (i >= 0) {
+        this._bringOverlayAtIndexToFront(i);
+        return;
+      }
+      var minimumZ = Math.max(this.currentOverlayZ(), this._minimumZ);
+      this._overlays.push(overlay);
+      var newZ = this.currentOverlayZ();
+      if (newZ <= minimumZ) {
+        this._applyOverlayZ(overlay, minimumZ);
+      }
+      var element = this.deepActiveElement;
+      overlay.restoreFocusNode = this._overlayParent(element) ? null : element;
+    },
+
+    /**
+     * @param {Element} overlay
+     */
+    removeOverlay: function(overlay) {
+      var i = this._overlays.indexOf(overlay);
+      if (i === -1) {
+        return;
+      }
       this._overlays.splice(i, 1);
       this._setZ(overlay, '');
 
-      var node = this._lastFocusedNodes[i];
-      // Focus only if still contained in document.body
-      if (overlay.restoreFocusOnClose && node && Polymer.dom(document.body).deepContains(node)) {
+      var node = overlay.restoreFocusOnClose ? overlay.restoreFocusNode : null;
+      overlay.restoreFocusNode = null;
+      // Focus back only if still contained in document.body
+      if (node && Polymer.dom(document.body).deepContains(node)) {
         node.focus();
       }
-      this._lastFocusedNodes.splice(i, 1);
-    }
-  };
+    },
 
-  Polymer.IronOverlayManagerClass.prototype.currentOverlay = function() {
-    var i = this._overlays.length - 1;
-    while (this._overlays[i] && !this._overlays[i].opened) {
-      --i;
-    }
-    return this._overlays[i];
-  };
+    /**
+     * Returns the current overlay.
+     * @return {Element|undefined}
+     */
+    currentOverlay: function() {
+      var i = this._overlays.length - 1;
+      return this._overlays[i];
+    },
 
-  Polymer.IronOverlayManagerClass.prototype.currentOverlayZ = function() {
-    return this._getOverlayZ(this.currentOverlay());
-  };
+    /**
+     * Returns the current overlay z-index.
+     * @return {number}
+     */
+    currentOverlayZ: function() {
+      return this._getZ(this.currentOverlay());
+    },
 
-  /**
-   * Ensures that the minimum z-index of new overlays is at least `minimumZ`.
-   * This does not effect the z-index of any existing overlays.
-   *
-   * @param {number} minimumZ
-   */
-  Polymer.IronOverlayManagerClass.prototype.ensureMinimumZ = function(minimumZ) {
-    this._minimumZ = Math.max(this._minimumZ, minimumZ);
-  };
+    /**
+     * Ensures that the minimum z-index of new overlays is at least `minimumZ`.
+     * This does not effect the z-index of any existing overlays.
+     * @param {number} minimumZ
+     */
+    ensureMinimumZ: function(minimumZ) {
+      this._minimumZ = Math.max(this._minimumZ, minimumZ);
+    },
 
-  Polymer.IronOverlayManagerClass.prototype.focusOverlay = function() {
-    var current = this.currentOverlay();
-    // We have to be careful to focus the next overlay _after_ any current
-    // transitions are complete (due to the state being toggled prior to the
-    // transition). Otherwise, we risk infinite recursion when a transitioning
-    // (closed) overlay becomes the current overlay.
-    //
-    // NOTE: We make the assumption that any overlay that completes a transition
-    // will call into focusOverlay to kick the process back off. Currently:
-    // transitionend -> _applyFocus -> focusOverlay.
-    if (current && !current.transitioning) {
-      current._applyFocus();
-    }
-  };
-
-  Polymer.IronOverlayManagerClass.prototype.trackBackdrop = function(element) {
-    // backdrops contains the overlays with a backdrop that are currently
-    // visible
-    var index = this._backdrops.indexOf(element);
-    if (element.opened && element.withBackdrop) {
-      // no duplicates
-      if (index === -1) {
-        this._backdrops.push(element);
+    focusOverlay: function() {
+      var current = /** @type {?} */ (this.currentOverlay());
+      // We have to be careful to focus the next overlay _after_ any current
+      // transitions are complete (due to the state being toggled prior to the
+      // transition). Otherwise, we risk infinite recursion when a transitioning
+      // (closed) overlay becomes the current overlay.
+      //
+      // NOTE: We make the assumption that any overlay that completes a transition
+      // will call into focusOverlay to kick the process back off. Currently:
+      // transitionend -> _applyFocus -> focusOverlay.
+      if (current && !current.transitioning) {
+        current._applyFocus();
       }
-    } else if (index >= 0) {
-      this._backdrops.splice(index, 1);
-    }
-  };
+    },
 
-  Polymer.IronOverlayManagerClass.prototype.getBackdrops = function() {
-    return this._backdrops;
-  };
+    /**
+     * Updates the backdrop z-index.
+     */
+    trackBackdrop: function() {
+      this.backdropElement.style.zIndex = this.backdropZ();
+    },
 
-  /**
-   * Returns the z-index for the backdrop.
-   */
-  Polymer.IronOverlayManagerClass.prototype.backdropZ = function() {
-    return this._getOverlayZ(this._overlayWithBackdrop()) - 1;
-  };
+    /**
+     * @return {Array<Element>}
+     */
+    getBackdrops: function() {
+      var backdrops = [];
+      for (var i = 0; i < this._overlays.length; i++) {
+        if (this._overlays[i].withBackdrop) {
+          backdrops.push(this._overlays[i]);
+        }
+      }
+      return backdrops;
+    },
 
-  /**
-   * Returns the first opened overlay that has a backdrop.
-   */
-  Polymer.IronOverlayManagerClass.prototype._overlayWithBackdrop = function() {
-    for (var i = 0; i < this._overlays.length; i++) {
-      if (this._overlays[i].opened && this._overlays[i].withBackdrop) {
-        return this._overlays[i];
+    /**
+     * Returns the z-index for the backdrop.
+     * @return {number}
+     */
+    backdropZ: function() {
+      return this._getZ(this._overlayWithBackdrop()) - 1;
+    },
+
+    /**
+     * Returns the first opened overlay that has a backdrop.
+     * @return {Element|undefined}
+     * @private
+     */
+    _overlayWithBackdrop: function() {
+      for (var i = 0; i < this._overlays.length; i++) {
+        if (this._overlays[i].withBackdrop) {
+          return this._overlays[i];
+        }
+      }
+    },
+
+    /**
+     * Calculates the minimum z-index for the overlay.
+     * @param {Element=} overlay
+     * @private
+     */
+    _getZ: function(overlay) {
+      var z = this._minimumZ;
+      if (overlay) {
+        var z1 = Number(window.getComputedStyle(overlay).zIndex);
+        // Check if is a number
+        // Number.isNaN not supported in IE 10+
+        if (z1 === z1) {
+          z = z1;
+        }
+      }
+      return z;
+    },
+
+    /**
+     * @param {Element} element
+     * @param {number|string} z
+     * @private
+     */
+    _setZ: function(element, z) {
+      element.style.zIndex = z;
+    },
+
+    /**
+     * @param {Element} overlay
+     * @param {number} aboveZ
+     * @private
+     */
+    _applyOverlayZ: function(overlay, aboveZ) {
+      this._setZ(overlay, aboveZ + 2);
+    },
+
+    /**
+     * Returns the overlay containing the provided node. If the node is an overlay,
+     * it returns the node.
+     * @param {Element=} node
+     * @return {Element|undefined}
+     * @private
+     */
+    _overlayParent: function(node) {
+      while (node && node !== document.body) {
+        // Check if it is an overlay.
+        if (node._manager === this) {
+          return node;
+        }
+        // Use logical parentNode, or native ShadowRoot host.
+        node = Polymer.dom(node).parentNode || node.host;
+      }
+    },
+
+    /**
+     * Returns the deepest overlay in the path.
+     * @param {?Array<Element>} path
+     * @return {Element|undefined}
+     * @private
+     */
+    _overlayInPath: function(path) {
+      path = path || [];
+      for (var i = 0; i < path.length; i++) {
+        if (path[i]._manager === this) {
+          return path[i];
+        }
+      }
+    },
+
+    /**
+     * Ensures the click event is delegated to the right overlay.
+     * @param {!Event} event
+     * @private
+     */
+    _onCaptureClick: function(event) {
+      var overlay = /** @type {?} */ (this.currentOverlay());
+      // Check if clicked outside of top overlay.
+      if (overlay && this._overlayInPath(Polymer.dom(event).path) !== overlay) {
+        overlay._onCaptureClick(event);
+      }
+    },
+
+    /**
+     * Ensures the focus event is delegated to the right overlay.
+     * @param {!Event} event
+     * @private
+     */
+    _onCaptureFocus: function(event) {
+      var overlay = /** @type {?} */ (this.currentOverlay());
+      if (overlay) {
+        overlay._onCaptureFocus(event);
+      }
+    },
+
+    /**
+     * Ensures TAB and ESC keyboard events are delegated to the right overlay.
+     * @param {!Event} event
+     * @private
+     */
+    _onCaptureKeyDown: function(event) {
+      var overlay = /** @type {?} */ (this.currentOverlay());
+      if (overlay) {
+        if (Polymer.IronA11yKeysBehavior.keyboardEventMatchesKeys(event, 'esc')) {
+          overlay._onCaptureEsc(event);
+        } else if (Polymer.IronA11yKeysBehavior.keyboardEventMatchesKeys(event, 'tab')) {
+          overlay._onCaptureTab(event);
+        }
       }
     }
-  };
-
-  /**
-   * Calculates the minimum z-index for the overlay.
-   */
-  Polymer.IronOverlayManagerClass.prototype._getOverlayZ = function(overlay) {
-    var z = this._minimumZ;
-    if (overlay) {
-      var z1 = Number(window.getComputedStyle(overlay).zIndex);
-      // Check if is a number
-      // Number.isNaN not supported in IE 10+
-      if (z1 === z1) {
-        z = z1;
-      }
-    }
-    return z;
   };
 
   Polymer.IronOverlayManager = new Polymer.IronOverlayManagerClass();
-
 </script>
 
 
@@ -14422,12 +14608,14 @@ CSS properties               | Action
       background-color: var(--iron-overlay-backdrop-background-color, #000);
       opacity: 0;
       transition: opacity 0.2s;
+      pointer-events: none;
 
       @apply(--iron-overlay-backdrop);
     }
 
     :host([opened]) {
       opacity: var(--iron-overlay-backdrop-opacity, 0.6);
+      pointer-events: auto;
 
       @apply(--iron-overlay-backdrop-opened);
     }
@@ -14475,8 +14663,6 @@ CSS properties               | Action
      * Appends the backdrop to document body and sets its `z-index` to be below the latest overlay.
      */
     prepare: function() {
-      // Always update z-index
-      this.style.zIndex = this._manager.backdropZ();
       if (!this.parentNode) {
         Polymer.dom(document.body).appendChild(this);
       }
@@ -14496,8 +14682,6 @@ CSS properties               | Action
      * Hides the backdrop if needed.
      */
     close: function() {
-      // Always update z-index
-      this.style.zIndex = this._manager.backdropZ();
       // close only if no element with backdrop is left
       if (this._manager.getBackdrops().length === 0) {
         // Read style before setting opened.
@@ -14637,15 +14821,6 @@ context. You should place this element as a child of `<body>` whenever possible.
       },
 
       /**
-       * The HTMLElement that will be firing relevant KeyboardEvents.
-       * Used for capturing esc and tab. Overridden from `IronA11yKeysBehavior`.
-       */
-      keyEventTarget: {
-        type: Object,
-        value: document
-      },
-
-      /**
        * Set to true to enable restoring of focus when overlay is closed.
        */
       restoreFocusOnClose: {
@@ -14653,23 +14828,14 @@ context. You should place this element as a child of `<body>` whenever possible.
         value: false
       },
 
+      /**
+       * Shortcut to access to the overlay manager.
+       * @private
+       * @type {Polymer.IronOverlayManagerClass}
+       */
       _manager: {
         type: Object,
         value: Polymer.IronOverlayManager
-      },
-
-      _boundOnCaptureClick: {
-        type: Function,
-        value: function() {
-          return this._onCaptureClick.bind(this);
-        }
-      },
-
-      _boundOnCaptureFocus: {
-        type: Function,
-        value: function() {
-          return this._onCaptureFocus.bind(this);
-        }
       },
 
       /**
@@ -14682,18 +14848,13 @@ context. You should place this element as a child of `<body>` whenever possible.
 
     },
 
-    keyBindings: {
-      'esc': '__onEsc',
-      'tab': '__onTab'
-    },
-
     listeners: {
       'iron-resize': '_onIronResize'
     },
 
     /**
      * The backdrop element.
-     * @type {Node}
+     * @type {Element}
      */
     get backdropElement() {
       return this._manager.backdropElement;
@@ -14714,7 +14875,7 @@ context. You should place this element as a child of `<body>` whenever possible.
      *
      * If you know what is your content (specifically the first and last focusable children),
      * you can override this method to return only `[firstFocusable, lastFocusable];`
-     * @type {[Node]}
+     * @type {Array<Node>}
      * @protected
      */
     get _focusableNodes() {
@@ -14782,8 +14943,10 @@ context. You should place this element as a child of `<body>` whenever possible.
       Polymer.dom(this).unobserveNodes(this._observer);
       this._observer = null;
       this.opened = false;
-      this._manager.trackBackdrop(this);
-      this._manager.removeOverlay(this);
+      if (this.withBackdrop) {
+        // Allow user interactions right away.
+        this.backdropElement.close();
+      }
     },
 
     /**
@@ -14812,7 +14975,7 @@ context. You should place this element as a child of `<body>` whenever possible.
 
     /**
      * Cancels the overlay.
-     * @param {?Event} event The original event
+     * @param {Event=} event The original event
      */
     cancel: function(event) {
       var cancelEvent = this.fire('iron-overlay-canceled', event, {cancelable: true});
@@ -14845,18 +15008,17 @@ context. You should place this element as a child of `<body>` whenever possible.
         return;
       }
 
-      this._manager.trackBackdrop(this);
+      this._manager.addOrRemoveOverlay(this);
 
       this.__isAnimating = true;
+
       if (this.opened) {
         this._prepareRenderOpened();
       }
-
       if (this._openChangedAsync) {
         this.cancelAsync(this._openChangedAsync);
       }
-      // Async here to allow overlay layer to become visible, and to avoid
-      // listeners to immediately close via a click.
+      // Async here to allow overlay layer to become visible.
       this._openChangedAsync = this.async(function() {
         // overlay becomes visible here
         this.style.display = '';
@@ -14868,9 +15030,8 @@ context. You should place this element as a child of `<body>` whenever possible.
         } else {
           this._renderClosed();
         }
-        this._toggleListeners();
         this._openChangedAsync = null;
-      }, 1);
+      });
     },
 
     _canceledChanged: function() {
@@ -14888,7 +15049,7 @@ context. You should place this element as a child of `<body>` whenever possible.
         this.__shouldRemoveTabIndex = false;
       }
       if (this.opened) {
-        this._manager.trackBackdrop(this);
+        this._manager.trackBackdrop();
         if (this.withBackdrop) {
           this.backdropElement.prepare();
           // Give time to be added to document.
@@ -14901,31 +15062,11 @@ context. You should place this element as a child of `<body>` whenever possible.
       }
     },
 
-    _toggleListener: function(enable, node, event, boundListener, capture) {
-      if (enable) {
-        // enable document-wide tap recognizer
-        if (event === 'tap') {
-          Polymer.Gestures.add(document, 'tap', null);
-        }
-        node.addEventListener(event, boundListener, capture);
-      } else {
-        // disable document-wide tap recognizer
-        if (event === 'tap') {
-          Polymer.Gestures.remove(document, 'tap', null);
-        }
-        node.removeEventListener(event, boundListener, capture);
-      }
-    },
-
-    _toggleListeners: function() {
-      this._toggleListener(this.opened, document, 'tap', this._boundOnCaptureClick, true);
-      this._toggleListener(this.opened, document, 'focus', this._boundOnCaptureFocus, true);
-    },
-
-    // tasks which must occur before opening; e.g. making the element visible
+    /**
+     * tasks which must occur before opening; e.g. making the element visible.
+     * @protected
+     */
     _prepareRenderOpened: function() {
-
-      this._manager.addOverlay(this);
 
       // Needed to calculate the size of the overlay so that transitions on its size
       // will have the correct starting points.
@@ -14944,8 +15085,10 @@ context. You should place this element as a child of `<body>` whenever possible.
       }
     },
 
-    // tasks which cause the overlay to actually open; typically play an
-    // animation
+    /**
+     * Tasks which cause the overlay to actually open; typically play an animation.
+     * @protected
+     */
     _renderOpened: function() {
       if (this.withBackdrop) {
         this.backdropElement.open();
@@ -14953,6 +15096,10 @@ context. You should place this element as a child of `<body>` whenever possible.
       this._finishRenderOpened();
     },
 
+    /**
+     * Tasks which cause the overlay to actually close; typically play an animation.
+     * @protected
+     */
     _renderClosed: function() {
       if (this.withBackdrop) {
         this.backdropElement.close();
@@ -14960,6 +15107,10 @@ context. You should place this element as a child of `<body>` whenever possible.
       this._finishRenderClosed();
     },
 
+    /**
+     * Tasks to be performed at the end of open action. Will fire `iron-overlay-opened`.
+     * @protected
+     */
     _finishRenderOpened: function() {
       // Focus the child node with [autofocus]
       this._applyFocus();
@@ -14969,10 +15120,13 @@ context. You should place this element as a child of `<body>` whenever possible.
       this.fire('iron-overlay-opened');
     },
 
+    /**
+     * Tasks to be performed at the end of close action. Will fire `iron-overlay-closed`.
+     * @protected
+     */
     _finishRenderClosed: function() {
       // Hide the overlay and remove the backdrop.
       this.style.display = 'none';
-      this._manager.removeOverlay(this);
 
       this._applyFocus();
 
@@ -14996,6 +15150,10 @@ context. You should place this element as a child of `<body>` whenever possible.
       this.style.transition = this.style.webkitTransition = '';
     },
 
+    /**
+     * Applies focus according to the opened state.
+     * @protected
+     */
     _applyFocus: function() {
       if (this.opened) {
         if (!this.noAutoFocus) {
@@ -15008,29 +15166,69 @@ context. You should place this element as a child of `<body>` whenever possible.
       }
     },
 
+    /**
+     * Cancels (closes) the overlay. Call when click happens outside the overlay.
+     * @param {!Event} event
+     * @protected
+     */
     _onCaptureClick: function(event) {
-      if (this._manager.currentOverlay() === this &&
-          Polymer.dom(event).path.indexOf(this) === -1) {
-        if (this.noCancelOnOutsideClick) {
-          this._applyFocus();
-        } else {
-          this.cancel(event);
-        }
+      if (!this.noCancelOnOutsideClick) {
+        this.cancel(event);
       }
     },
 
+    /**
+     * Keeps track of the focused child. If withBackdrop, traps focus within overlay.
+     * @param {!Event} event
+     * @protected
+     */
     _onCaptureFocus: function (event) {
-      if (this._manager.currentOverlay() === this && this.withBackdrop) {
-        var path = Polymer.dom(event).path;
-        if (path.indexOf(this) === -1) {
-          event.stopPropagation();
-          this._applyFocus();
-        } else {
-          this._focusedChild = path[0];
-        }
+      if (!this.withBackdrop) {
+        return;
+      }
+      var path = Polymer.dom(event).path;
+      if (path.indexOf(this) === -1) {
+        event.stopPropagation();
+        this._applyFocus();
+      } else {
+        this._focusedChild = path[0];
       }
     },
 
+    /**
+     * Handles the ESC key event and cancels (closes) the overlay.
+     * @param {!Event} event
+     * @protected
+     */
+    _onCaptureEsc: function(event) {
+      if (!this.noCancelOnEscKey) {
+        this.cancel(event);
+      }
+    },
+
+    /**
+     * Handles TAB key events to track focus changes.
+     * Will wrap focus for overlays withBackdrop.
+     * @param {!Event} event
+     * @protected
+     */
+    _onCaptureTab: function(event) {
+      // TAB wraps from last to first focusable.
+      // Shift + TAB wraps from first to last focusable.
+      var shift = event.shiftKey;
+      var nodeToCheck = shift ? this.__firstFocusableNode : this.__lastFocusableNode;
+      var nodeToSet = shift ? this.__lastFocusableNode : this.__firstFocusableNode;
+      if (this.withBackdrop && this._focusedChild === nodeToCheck) {
+        // We set here the _focusedChild so that _onCaptureFocus will handle the
+        // wrapping of the focus (the next event after tab is focus).
+        this._focusedChild = nodeToSet;
+      }
+    },
+
+    /**
+     * Refits if the overlay is opened and not animating.
+     * @protected
+     */
     _onIronResize: function() {
       if (this.__isAnimating) {
         return;
@@ -15042,9 +15240,9 @@ context. You should place this element as a child of `<body>` whenever possible.
     },
 
     /**
-     * @protected
      * Will call notifyResize if overlay is opened.
      * Can be overridden in order to avoid multiple observers on the same node.
+     * @protected
      */
     _onNodesChange: function() {
       if (this.opened && !this.__isAnimating) {
@@ -15054,38 +15252,11 @@ context. You should place this element as a child of `<body>` whenever possible.
       var focusableNodes = this._focusableNodes;
       this.__firstFocusableNode = focusableNodes[0];
       this.__lastFocusableNode = focusableNodes[focusableNodes.length - 1];
-    },
-
-    __onEsc: function(event) {
-      // Not opened or not on top, so return.
-      if (this._manager.currentOverlay() !== this) {
-        return;
-      }
-      if (!this.noCancelOnEscKey) {
-        this.cancel(event);
-      }
-    },
-
-    __onTab: function(event) {
-      // Not opened or not on top, so return.
-      if (this._manager.currentOverlay() !== this) {
-        return;
-      }
-      // TAB wraps from last to first focusable.
-      // Shift + TAB wraps from first to last focusable.
-      var shift = event.detail.keyboardEvent.shiftKey;
-      var nodeToCheck = shift ? this.__firstFocusableNode : this.__lastFocusableNode;
-      var nodeToSet = shift ? this.__lastFocusableNode : this.__firstFocusableNode;
-      if (this.withBackdrop && this._focusedChild === nodeToCheck) {
-        // We set here the _focusedChild so that _onCaptureFocus will handle the
-        // wrapping of the focus (the next event after tab is focus).
-        this._focusedChild = nodeToSet;
-      }
     }
   };
 
   /** @polymerBehavior */
-  Polymer.IronOverlayBehavior = [Polymer.IronA11yKeysBehavior, Polymer.IronFitBehavior, Polymer.IronResizableBehavior, Polymer.IronOverlayBehaviorImpl];
+  Polymer.IronOverlayBehavior = [Polymer.IronFitBehavior, Polymer.IronResizableBehavior, Polymer.IronOverlayBehaviorImpl];
 
   /**
   * Fired after the `iron-overlay` opens.
@@ -15195,6 +15366,16 @@ context. You should place this element as a child of `<body>` whenever possible.
            * Set to false to enable closing of the toast by clicking outside it.
            */
           noCancelOnOutsideClick: {
+            type: Boolean,
+            value: true
+          },
+
+          /**
+           * Overridden from `IronOverlayBehavior`.
+           * Set to true to disable auto-focusing the toast or child nodes with
+           * the `autofocus` attribute` when the overlay is opened.
+           */
+          noAutoFocus: {
             type: Boolean,
             value: true
           }
@@ -16770,6 +16951,7 @@ if (!window.Promise) {
       case 'loaded':
       case 'native':
       default:
+        /* istanbul ignore next: these cases are impossible */
         break;
       }
     }
@@ -17099,6 +17281,10 @@ if (!window.Promise) {
     ready: function () {
       this._setupObservers();
       this.raw = this.textNode.data;
+      if (!this.lang) {
+        // Polyfill non-functional default value for lang property in Safari 7
+        this.lang = this.DEFAULT_LANG;
+      }
     },
 
     attached: function () {
@@ -17116,6 +17302,11 @@ if (!window.Promise) {
       }
       this.observer = new MutationObserver(this._textMutated.bind(this));
       this.observer.observe(this.textNode, { characterData: true });
+      var desc = Object.getOwnPropertyDescriptor(this, 'lang');
+      if (desc && typeof desc.set !== 'function') {
+        // Fix #3. Emulate lang's observer since Safari 7 overrides lang property
+        this.observer.observe(this, { attributes: true, attributeFilter: [ 'lang' ] });
+      }
       this.nodeObserver = Polymer.dom(this).observeNodes(function (info) {
         if (info.addedNodes[0] && 
             info.addedNodes[0].nodeType === info.addedNodes[0].TEXT_NODE) {
@@ -17141,7 +17332,13 @@ if (!window.Promise) {
             this.raw = mutation.target.data;
           }
           break;
+        case 'attributes':
+          if (mutation.attributeName === 'lang') {
+            this._langChanged(this.lang);
+          }
+          break;
         default:
+          /* istanbul ignore next: mutation.type is characterData or attributes */
           break;
         }
       }, this);
@@ -17230,8 +17427,8 @@ if (!window.Promise) {
       default:
         try {
           if (_setupIntlPolyfillLocale.call(this, lang, function (locale) {
-            this.lang = locale;
-            this._render.call(this, this.lang, this.options, this.raw, this.offset);
+            this.effectiveLang = locale;
+            this._render.call(this, locale, this.options, this.raw, this.offset);
           }.bind(this))) {
             return new Intl.NumberFormat(lang, options).format(number);
           }
@@ -17243,6 +17440,7 @@ if (!window.Promise) {
         catch (e) {
           return number.toString();
         }
+        /* istanbul ignore next: unreachable code due to returns in the same case */
         break;
       case 'native':
         // native
@@ -17252,6 +17450,7 @@ if (!window.Promise) {
         catch (e) {
           return number.toString();
         }
+        /* istanbul ignore next: unreachable code due to returns in the same case */
         break;
       }
     },
@@ -17382,6 +17581,10 @@ Polymer({
 
   ready: function () {
     this._setupParams();
+    if (!this.lang) {
+      // Polyfill non-functional default value for lang property in Safari 7
+      this.lang = this.DEFAULT_LANG;
+    }
   },
 
   attached: function () {
@@ -17402,11 +17605,16 @@ Polymer({
     var needParamObservation = this.observeParams &&
                                this.elements.length > 0 && 
                                this.elements[0].tagName.toLowerCase() === 'json-data';
+    this.observer = new MutationObserver(this._templateMutated.bind(this));
+    var desc = Object.getOwnPropertyDescriptor(this, 'lang');
+    if (desc && typeof desc.set !== 'function') {
+      // Fix #1. Emulate lang's observer since Safari 7 overrides lang property
+      this.observer.observe(this, { attributes: true, attributeFilter: [ 'lang' ] });
+    }
     for (n = 0; n < this.elements.length; n++) {
       if (n === 0) {
         this.templateElement = this.elements[n];
         this.templateTextNode = Polymer.dom(this.templateElement).childNodes[0];
-        this.observer = new MutationObserver(this._templateMutated.bind(this));
         this.observer.observe(this.templateTextNode, { characterData: true });
       }
       else {
@@ -17444,7 +17652,13 @@ Polymer({
           this.render();
         }
         break;
+      case 'attributes':
+        if (mutation.attributeName === 'lang') {
+          this._langChanged(this.lang);
+        }
+        break;
       default:
+        /* istanbul ignore next: mutation.type is always characterData or attributes */
         break;
       }
     }, this);
@@ -17904,7 +18118,7 @@ Polymer({
       }
       else {
         if (!html.hasAttribute('preferred')) {
-          html.setAttribute('lang', navigator.language);
+          html.setAttribute('lang', navigator.language || navigator.browserLanguage);
         }
       }
     },
@@ -17931,7 +18145,7 @@ Polymer({
               this.$.storage.value = html.getAttribute('lang');
             }
             else {
-              this.$.storage.value = navigator.language;
+              this.$.storage.value = navigator.language || navigator.browserLanguage;
               if (html.getAttribute('lang') !== this.$.storage.value) {
                 html.setAttribute('lang', this.$.storage.value);
               }
@@ -18082,6 +18296,7 @@ Polymer({
       <paper-textarea label="" error-message="" placeholder=""></paper-textarea>
       <paper-dropdown-menu label=""></paper-dropdown-menu>
       <paper-toast text=""></paper-toast>
+      <paper-badge label=""></paper-badge>
       <google-chart options="" cols="" rows="" data=""></google-chart>
       <google-signin label-signin="" label-signout="" label-additional=""></google-signin>
       <platinum-push-messaging title="" message=""></platinum-push-messaging>
@@ -18219,6 +18434,28 @@ Polymer({
   'use strict';
 
   var html = document.querySelector('html');
+  if (window.ShadowDOMPolyfill) {
+    // Fix #38. Add reflectToAttribute effect on html.lang property
+    // for supplementing Shadow DOM MutationObserver polyfill
+    Object.defineProperty(html, 'lang', {
+      get: function () {
+        return this.getAttribute('lang');
+      },
+      set: function (value) {
+        this.setAttribute('lang', value);
+      }
+    });
+  }
+
+  // Safari 7 predefines non-configurable standard properties
+  // Note: They become configurable with ShadowDOMPolyfill, which wraps them.
+  var isStandardPropertyConfigurable = (function () {
+    var langPropertyDescriptor = Object.getOwnPropertyDescriptor(document.createElement('span'), 'lang');
+    return !langPropertyDescriptor || langPropertyDescriptor.configurable;
+  })();
+  // Polymer 1.4.0 on Safari 7 inserts extra unexpected whitepace node at the beginning of template
+  var extraWhiteSpaceNode = !isStandardPropertyConfigurable;
+
   // app global bundle storage
   var bundles = { '': {} }; // with an empty default bundle
   // app global default language
@@ -18248,7 +18485,7 @@ Polymer({
     function (arg) {
       console.log(arg);
     } :
-    function () {}
+    function () {};
 
   window.BehaviorsStore = window.BehaviorsStore || {};
   /**
@@ -18742,6 +18979,36 @@ Polymer({
       return nextFallbackLanguage ? nextFallbackLanguage : null;
     },
     */
+
+    /**
+     * MutationObserver callback of `lang` attribute for Safari 7
+     *
+     * @param {Array} mutations Array of MutationRecord (https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver).
+     */
+    _handleLangAttributeChange: function (mutations) {
+      mutations.forEach(function(mutation) {
+        switch (mutation.type) {
+        case 'attributes':
+          if (mutation.attributeName === 'lang') {
+            //console.log('_handleLangAttributeChange lang = ' + this.lang + ' oldValue = ' + mutation.oldValue +
+            //            ' typeof oldValue = ' + typeof mutation.oldValue);
+            if (!(typeof mutation.oldValue === 'object' && !mutation.oldValue) &&
+                mutation.oldValue !== this.lang) {
+              if (this._lang !== mutation.oldValue) {
+                //console.log('assigning this._lang = ' + mutation.oldValue + ' from old value');
+                this._lang = mutation.oldValue;
+              }
+              //console.log('assigning this._lang = ' + this.lang);
+              this._lang = this.lang;
+            }
+          }
+          break;
+        default:
+          /* istanbul ignore next: mutation.type is always attributes */
+          break;
+        }
+      }, this);
+    },
 
     /**
      * Observer of `this.lang` changes.
@@ -19352,6 +19619,9 @@ Polymer({
           }
         }
         else {
+          if (extraWhiteSpaceNode) {
+            template.setAttribute('strip-whitespace', '');
+          }
           // traverse template to generate bundle
           this._traverseTemplateTree(template.content, path, bundle, 0);
         }
@@ -19710,6 +19980,11 @@ Polymer({
         case 'template':
           // traverse into its content
           //console.log(path.join(':') + ':' + node.content.nodeName + ':' + 0);
+          if (extraWhiteSpaceNode) {
+            //if (node.hasAttribute('is') && node.getAttribute('is').match(/^(i18n-)?dom-/)) {
+              node.setAttribute('strip-whitespace', '');
+            //}
+          }
           this._traverseTemplateTree(node.content, path, bundle, 0);
           break;
         default:
@@ -19803,13 +20078,16 @@ Polymer({
                                               firstChild.nodeType === firstChild.TEXT_NODE &&
                                               this._isCompoundAnnotatedText(firstChild.textContent),
                     hasTextChild: templateNonCommentChildNodes.length === 0 &&
+                                  firstChild &&
                                   firstChild.nodeType === child.ELEMENT_NODE &&
                                   firstChild.childElementCount === 0, // including <br>
-                    hasCompoundAnnotatedChildNode: firstChild.nodeType === firstChild.ELEMENT_NODE &&
+                    hasCompoundAnnotatedChildNode: firstChild &&
+                                                   firstChild.nodeType === firstChild.ELEMENT_NODE &&
                                                    firstChild.childElementCount === 0 &&
                                                    this._isCompoundAnnotatedText(firstChild.textContent),
                     hasGrandChildren: templateNonCommentChildNodes.length > 0 ||
-                                      (firstChild.nodeType === firstChild.ELEMENT_NODE &&
+                                      (firstChild &&
+                                       firstChild.nodeType === firstChild.ELEMENT_NODE &&
                                         Array.prototype.map.call(
                                           firstChild.childNodes,
                                           function (grandChild) {
@@ -19909,13 +20187,29 @@ Polymer({
                           return true;
                         }
                       }).shift();
-                    return [{
-                      node: firstChild,
-                      templateNode: child,
-                      type: firstChild.nodeType,
-                      text: null,
-                      childTextNode: true
-                    }];
+                    if (!firstChild) {
+                      firstChild =
+                        Array.prototype.filter.call(child.content.childNodes, function (templateChild) {
+                          switch (templateChild.nodeType) {
+                          case templateChild.COMMENT_NODE:
+                            return false;
+                          default:
+                            return true;
+                          }
+                        }).shift();
+                    }
+                    if (firstChild) {
+                      return [{
+                        node: firstChild,
+                        templateNode: child,
+                        type: firstChild.nodeType,
+                        text: null,
+                        childTextNode: true
+                      }];
+                    }
+                    else {
+                      return [];
+                    }
                   }
                   else {
                     return [{
@@ -20060,32 +20354,17 @@ Polymer({
             messageId = this._generateMessageId(path, id);
             templateTextParams = Array.prototype.map.call(
               [ node ], function (child) {
-                /* node is always TEXT_NODE */
-                /* istanbul ignore else */
-                if (child.nodeType === child.TEXT_NODE &&
-                    this._hasAnnotatedText(child.textContent)) {
-                  return this._compoundAnnotationToSpan(child)
-                    .map(function (_child) {
-                      return {
-                        node: _child,
-                        type: _child.nodeType,
-                        text: _child.nodeType === _child.TEXT_NODE ? 
-                                _child.textContent : null,
-                        childTextNode: _child.nodeType === _child.ELEMENT_NODE &&
-                                       _child.childNodes.length > 0
-                      };
-                    });
-                }
-                else {
-                  return [{
-                    node: child,
-                    type: child.nodeType,
-                    text: child.nodeType === child.TEXT_NODE ? 
-                            child.textContent : null,
-                    childTextNode: child.nodeType === child.ELEMENT_NODE &&
-                                   child.childNodes.length > 0
-                  }];
-                }
+                return this._compoundAnnotationToSpan(child)
+                  .map(function (_child) {
+                    return {
+                      node: _child,
+                      type: _child.nodeType,
+                      text: _child.nodeType === _child.TEXT_NODE ? 
+                              _child.textContent : null,
+                      childTextNode: _child.nodeType === _child.ELEMENT_NODE &&
+                                     _child.childNodes.length > 0
+                    };
+                  });
               }.bind(this)).reduce(function (prev, currentList) {
                 var current;
                 for (var i = 0; i < currentList.length; i++) {
@@ -20100,38 +20379,7 @@ Polymer({
                     this._traverseAttributes(current.node, path, bundle);
                     path.pop();
                     /* current.childTextNode is always true since current.node is <span>{{annotation}}</span> */
-                    /* istanbul ignore else */
-                    if (current.childTextNode) {
-                      var textContent = current.node.textContent;
-                      /* textContent is always {{annotation}} */
-                      /* istanbul ignore if */
-                      if (textContent.length === 0) {
-                        // tag without textContent
-                        prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
-                        current.node.textContent = '';
-                      }
-                      /* textContent is always {{annotation}} */
-                      /* istanbul ignore if */
-                      else if (textContent.match(/^\s*$/g)) {
-                        // tag with whitespace textContent
-                        prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
-                        current.node.textContent = ' ';
-                      }
-                      /* textContent is always {{annotation}} */
-                      /* istanbul ignore else */
-                      else if (textContent.match(/^({{.*}}|\[\[.*\]\])$/)) {
-                        // tag with annotation
-                        prev.text.push(textContent);
-                        // textContent is untouched
-                      }
-                      else {
-                        prev.text.push(current.node.textContent.replace(/^[\s]*[\s]/, ' ').replace(/[\s][\s]*$/, ' '));
-                        current.node.textContent = '{{text.' + messageId + '.' + n + '}}';
-                      }
-                    }
-                    else {
-                      prev.text.push('<' + current.node.nodeName.toLowerCase() + '>');
-                    }
+                    prev.text.push(current.node.textContent);
                     current.node.setAttribute('param', n.toString());
                     prev.params.push(current.node);
                   }
@@ -20221,6 +20469,7 @@ Polymer({
      */
     _compoundAnnotationToSpan: function (node) {
       var result;
+      /* istanbul ignore else: node is prechecked to contain annotation(s) */
       if (node.textContent.match(/({{[^{}]*}}|\[\[[^\[\]]*\]\])/)) {
         result = node.textContent
           .match(/({{[^{}]*}}|\[\[[^\[\]]*\]\]|[^{}\[\]]{1,}|[{}\[\]]{1,})/g)
@@ -20469,6 +20718,32 @@ Polymer({
     },
 
     /**
+     * Lifecycle callback on instance creation
+     */
+    created: function () {
+      // Fix #34. [Polymer 1.4.0] _propertyEffects have to be maintained per instance
+      if (this.is === 'i18n-dom-bind') {
+        this._propertyEffects = deepcopy(this._propertyEffects);
+      }
+      if (!isStandardPropertyConfigurable) {
+        // Fix #36. Emulate lang's observer since Safari 7 predefines non-configurable lang property
+        if (!isStandardPropertyConfigurable) {
+          if (typeof this.getAttribute('lang') === 'object' &&
+              !this.getAttribute('lang')) {
+            //console.log('supplying defaultLang lang = ' + defaultLang);
+            //this.setAttribute('lang', defaultLang);
+          }
+        }
+        this.observer = new MutationObserver(this._handleLangAttributeChange.bind(this));
+        this.observer.observe(this, {
+          attributes: true,
+          attributeFilter: [ 'lang' ],
+          attributeOldValue: true
+        });
+      }
+    },
+
+    /**
      * Lifecycle callback when the template children are ready.
      */
     ready: function () {
@@ -20490,8 +20765,21 @@ Polymer({
         }
         this._onDomChangeBindThis = this._onDomChange.bind(this);
         this.addEventListener('dom-change', this._onDomChangeBindThis);
+        // Fix #34. [Polymer 1.4.0] Supply an empty object if this.__data__ is undefined
+        this.__data__ = this.__data__ || Object.create(null);
       }
       else {
+        if (!isStandardPropertyConfigurable) {
+          // Fix #36. Patch missing properties except for lang
+          for (var p in this._propertyEffects) {
+            if (this._propertyEffects[p] &&
+                !Object.getOwnPropertyDescriptor(this, p)) {
+              //console.log('ready: creating accessors for ' + p);
+              Polymer.Bind._createAccessors(this, p, this._propertyEffects[p]);
+            }
+          }
+        }
+        this._langChanged(this.getAttribute('lang'), undefined);
         // model per instance
         this.model = deepcopy(this.text.model);
       }
@@ -20501,6 +20789,13 @@ Polymer({
      * attached lifecycle callback.
      */
     attached: function () {
+      if (this.is === 'i18n-dom-bind') {
+        if (this._properties) {
+          // Fix #35. [IE10] Restore properties for use in rendering
+          this.properties = this._properties;
+          delete this._properties;
+        }
+      }
       if (this.observeHtmlLang) {
         this.lang = html.lang;
         // TODO: this call is redundant
@@ -20514,9 +20809,12 @@ Polymer({
     _onDomChange: function () {
       // Fix #16: [IE11][Polymer 1.3.0] On IE11, i18n-dom-bind does not work with Polymer 1.3.0
       // Patch the broken lang property accessors manually if it is missing
-      if (this._propertyEffects.lang &&
-          !Object.getOwnPropertyDescriptor(this, 'lang')) {
-        Polymer.Bind._createAccessors(this, 'lang', this._propertyEffects.lang);
+      // Fix #34: [IE11][Polymer 1.4.0] Create missing property accessors including lang
+      for (var p in this._propertyEffects) {
+        if (this._propertyEffects[p] &&
+            !Object.getOwnPropertyDescriptor(this, p)) {
+          Polymer.Bind._createAccessors(this, p, this._propertyEffects[p]);
+        }
       }
       this.removeEventListener('dom-change', this._onDomChangeBindThis);
       if (this.text && this.text.model) {
@@ -20544,12 +20842,37 @@ Polymer({
     }
   };
 
+  // Fix #36. Rename lang property as _lang to avoid conflict with the predefined lang property
+  if (!isStandardPropertyConfigurable) {
+    var _properties = Object.create(null);
+    for (var p in BehaviorsStore.I18nBehavior.properties) {
+      if (p === 'lang') {
+        _properties._lang = BehaviorsStore.I18nBehavior.properties.lang;
+      }
+      else {
+        _properties[p] = BehaviorsStore.I18nBehavior.properties[p];
+      }
+    }
+    BehaviorsStore.I18nBehavior.properties = _properties;
+    BehaviorsStore.I18nBehavior.properties._lang.reflectToAttribute = false;
+    BehaviorsStore.I18nBehavior.properties.text.computed = '_getBundle(_lang)';
+    BehaviorsStore.I18nBehavior._updateEffectiveLang = function () {
+      //console.log('lang-updated: _updateEffectiveLang: assigning effectiveLang = ' + this._lang);
+      this.effectiveLang = this._lang;
+    };
+    BehaviorsStore.I18nBehavior.hostAttributes = {
+      'lang': defaultLang
+    };
+  }
+
   /**
    * `<template is="i18n-dom-bind">` element extends `dom-bind` template element with `I18nBehavior`
    *
    * @group I18nBehavior
    * @element i18n-dom-bind
    */
+  var i18nBehaviorDomBind = {};
+  Polymer.Base.extend(i18nBehaviorDomBind, BehaviorsStore.I18nBehavior);
   var i18nDomBind = {};
   var domBind = document.createElement('template', 'dom-bind');
   var domBindProto = Object.getPrototypeOf(domBind);
@@ -20558,13 +20881,19 @@ Polymer({
   }
   Polymer.Base.extend(i18nDomBind, domBindProto);
   i18nDomBind.is = 'i18n-dom-bind';
+  if (!navigator.language && navigator.browserLanguage) { // Detect IE10
+    // Fix #35. [IE10] Hide properties until attached phase in IE10
+    // to avoid exceptions in overriding unconfigurable properties in Object.defineProperty
+    i18nBehaviorDomBind._properties = i18nBehaviorDomBind.properties;
+    i18nBehaviorDomBind.properties = Object.create(null);
+  }
   /* As of Polymer 1.3.1, dom-bind does not have predefined behaviors */
   /* istanbul ignore if */
   if (i18nDomBind.behaviors) {
-    i18nDomBind.behaviors.push(BehavirosStore.I18nBehavior);
+    i18nDomBind.behaviors.push(i18nBehaviorDomBind);
   }
   else {
-    i18nDomBind.behaviors = [ BehaviorsStore.I18nBehavior ];
+    i18nDomBind.behaviors = [ i18nBehaviorDomBind ];
   }
   var _Polymer = Polymer;
   _Polymer(i18nDomBind);
