@@ -1,4 +1,12 @@
 <html><head><!--
+@license
+Copyright (c) 2016 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+--><!--
 @license https://github.com/t2ym/i18n-behavior/blob/master/LICENSE.md
 Copyright (c) 2016, Tetsuya Mori <t2y3141592@gmail.com>. All rights reserved.
 --><!--
@@ -20727,13 +20735,6 @@ Polymer({
       }
       if (!isStandardPropertyConfigurable) {
         // Fix #36. Emulate lang's observer since Safari 7 predefines non-configurable lang property
-        if (!isStandardPropertyConfigurable) {
-          if (typeof this.getAttribute('lang') === 'object' &&
-              !this.getAttribute('lang')) {
-            //console.log('supplying defaultLang lang = ' + defaultLang);
-            //this.setAttribute('lang', defaultLang);
-          }
-        }
         this.observer = new MutationObserver(this._handleLangAttributeChange.bind(this));
         this.observer.observe(this, {
           attributes: true,
@@ -22014,7 +22015,7 @@ module.exports = Array.isArray || function (arr) {
 });</script>
 <script>
   window.addEventListener('WebComponentsReady', function() {
-    
+
     // We use Page.js for routing. This is a Micro
     // client-side router inspired by the Express router
     // More info: https://visionmedia.github.io/page.js/
@@ -22034,9 +22035,11 @@ module.exports = Array.isArray || function (arr) {
       app.closeDrawer();
       next();
     }
-    
+
     function setFocus(selected){
-      document.querySelector('section[data-route="' + selected + '"]').focus();
+      Polymer.dom(document)
+        .querySelector('section[data-route="' + selected + '"] .focus-target')
+        .focus();
     }
 
     // Routes
@@ -22365,7 +22368,7 @@ module.exports = Array.isArray || function (arr) {
       }
     </style>
 
-    <h1 class="page-title">{{greeting}}</h1>
+    <h1 class="page-title" tabindex="-1">{{greeting}}</h1>
     <label for="greeting-input">{{text.label_2}}</label>
     
     <input value="{{greeting::input}}">
