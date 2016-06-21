@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE xliff PUBLIC "-//XLIFF//DTD XLIFF//EN" "http://www.oasis-open.org/committees/xliff/documents/xliff.dtd">
+<xliff version="1.0">
+  <file xml:space="default" source-language="en" target-language="fr" datatype="plaintext" original="messages" date="2016-06-21T03:12:33Z" product-name="messages">
+    <header>
+      <tool tool-id="xliff-conv" tool-name="xliff-conv" tool-version="1.0.0"/>
+    </header>
+    <body>
+      <trans-unit id="app.drawerToolbar:span" approved="yes">
+        <source>Menu</source>
+        <target state="translated">fr Menu</target>
+      </trans-unit>
+      <trans-unit id="app.paperDrawerPanel:paper-scroll-header-panel:paper-menu_1:a:span_1" approved="yes">
+        <source>Home</source>
+        <target state="translated">fr Home</target>
+      </trans-unit>
+      <trans-unit id="app.paperDrawerPanel:paper-scroll-header-panel:paper-menu_1:a_1:span_1" approved="yes">
+        <source>Users</source>
+        <target state="translated">fr Users</target>
+      </trans-unit>
+      <trans-unit id="app.paperDrawerPanel:paper-scroll-header-panel:paper-menu_1:a_2:span_1" approved="yes">
+        <source>Contact</source>
+        <target state="translated">fr Contact</target>
+      </trans-unit>
+      <trans-unit id="app.mainToolbar:div_2:div" approved="yes">
+        <source>Polymer Starter Kit</source>
+        <target state="translated">fr Polymer Starter Kit</target>
+      </trans-unit>
+      <trans-unit id="app.mainToolbar:div_3:div" approved="yes">
+        <source>The future of the web today</source>
+        <target state="translated">fr The future of the web today</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section:paper-material:p_1" approved="yes">
+        <source>You now have:</source>
+        <target state="translated">fr You now have:</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section:paper-material:p_3.0" approved="yes">
+        <source>Looking for more Web App layouts? Check out our {1} collection. You can also {2} them live.</source>
+        <target state="translated">fr Looking for more Web App layouts? Check out our {1} collection. You can also {2} them live.</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section:paper-material:p_3.1" approved="yes">
+        <source>layouts</source>
+        <target state="translated">fr layouts</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section:paper-material:p_3.2" approved="yes">
+        <source>preview</source>
+        <target state="translated">fr preview</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section:paper-material_1:p" approved="yes">
+        <source>This is another card.</source>
+        <target state="translated">fr This is another card.</target>
+      </trans-unit>
+      <trans-unit id="app.license" approved="yes">
+        <source>License</source>
+        <target state="translated">fr License</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section:paper-material_2:p_1" approved="yes">
+        <source>Everything in this repo is BSD style license unless otherwise specified.</source>
+        <target state="translated">fr Everything in this repo is BSD style license unless otherwise specified.</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section:paper-material_2:p_2" approved="yes">
+        <source>Copyright (c) 2015 The Polymer Authors. All rights reserved.</source>
+        <target state="translated">fr Copyright (c) 2015 The Polymer Authors. All rights reserved.</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section:paper-material_2:p_3" approved="yes">
+        <source>Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:</source>
+        <target state="translated">fr Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section:paper-material_2:ul_4:li" approved="yes">
+        <source>Redistributions of source code must retain the above copyright
+                notice, this list of conditions and the following disclaimer.</source>
+        <target state="translated">fr Redistributions of source code must retain the above copyright
+                notice, this list of conditions and the following disclaimer.</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section:paper-material_2:ul_4:li_1" approved="yes">
+        <source>Redistributions in binary form must reproduce the above
+                copyright notice, this list of conditions and the following disclaimer
+                in the documentation and/or other materials provided with the
+                distribution.</source>
+        <target state="translated">fr Redistributions in binary form must reproduce the above
+                copyright notice, this list of conditions and the following disclaimer
+                in the documentation and/or other materials provided with the
+                distribution.</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section:paper-material_2:ul_4:li_2" approved="yes">
+        <source>Neither the name of Google Inc. nor the names of its
+                contributors may be used to endorse or promote products derived from
+                this software without specific prior written permission.</source>
+        <target state="translated">fr Neither the name of Google Inc. nor the names of its
+                contributors may be used to endorse or promote products derived from
+                this software without specific prior written permission.</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section:paper-material_2:p_5" approved="yes">
+        <source>THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</source>
+        <target state="translated">fr THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section_1:paper-material:h1" approved="yes">
+        <source>Users</source>
+        <target state="translated">fr Users</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section_1:paper-material:p_1" approved="yes">
+        <source>This is the users section</source>
+        <target state="translated">fr This is the users section</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section_1:paper-material:a_2" approved="yes">
+        <source>Addy</source>
+        <target state="translated">fr Addy</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section_1:paper-material:a_4" approved="yes">
+        <source>Rob</source>
+        <target state="translated">fr Rob</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section_1:paper-material:a_6" approved="yes">
+        <source>Chuck</source>
+        <target state="translated">fr Chuck</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section_1:paper-material:a_8" approved="yes">
+        <source>Sam</source>
+        <target state="translated">fr Sam</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section_2:paper-material:h1.0" approved="yes">
+        <source>User: {1}</source>
+        <target state="translated">fr User: {1}</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section_2:paper-material:h1.1" approved="yes">
+        <source>{{params.name}}</source>
+        <target state="translated">{{params.name}}</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section_2:paper-material:div_1.0" approved="yes">
+        <source>This is {1}'s section</source>
+        <target state="translated">fr This is {1}'s section</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section_2:paper-material:div_1.1" approved="yes">
+        <source>{{params.name}}</source>
+        <target state="translated">{{params.name}}</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section_3:paper-material:h1" approved="yes">
+        <source>Contact</source>
+        <target state="translated">fr Contact</target>
+      </trans-unit>
+      <trans-unit id="app.headerPanelMain:div_1:iron-pages:section_3:paper-material:p_1" approved="yes">
+        <source>This is the contact section</source>
+        <target state="translated">fr This is the contact section</target>
+      </trans-unit>
+      <trans-unit id="app.toast:span" approved="yes">
+        <source>Ok</source>
+        <target state="translated">fr Ok</target>
+      </trans-unit>
+      <trans-unit id="my-greeting.label_2" approved="yes">
+        <source>Update text to change the greeting.</source>
+        <target state="translated">fr Update text to change the greeting.</target>
+      </trans-unit>
+      <trans-unit id="my-greeting.welcome" approved="yes">
+        <source>Welcome!</source>
+        <target state="translated">fr Welcome!</target>
+      </trans-unit>
+      <trans-unit id="my-list.items.0" approved="yes">
+        <source>Responsive Web App boilerplate</source>
+        <target state="translated">fr Responsive Web App boilerplate</target>
+      </trans-unit>
+      <trans-unit id="my-list.items.1" approved="yes">
+        <source>Iron Elements and Paper Elements</source>
+        <target state="translated">fr Iron Elements and Paper Elements</target>
+      </trans-unit>
+      <trans-unit id="my-list.items.2" approved="yes">
+        <source>End-to-end Build Tooling (including Vulcanize)</source>
+        <target state="translated">fr End-to-end Build Tooling (including Vulcanize)</target>
+      </trans-unit>
+      <trans-unit id="my-list.items.3" approved="yes">
+        <source>Unit testing with Web Component Tester</source>
+        <target state="translated">fr Unit testing with Web Component Tester</target>
+      </trans-unit>
+      <trans-unit id="my-list.items.4" approved="yes">
+        <source>Routing with Page.js</source>
+        <target state="translated">fr Routing with Page.js</target>
+      </trans-unit>
+      <trans-unit id="my-list.items.5" approved="yes">
+        <source>Offline support with the Platinum Service Worker Elements</source>
+        <target state="translated">fr Offline support with the Platinum Service Worker Elements</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>
