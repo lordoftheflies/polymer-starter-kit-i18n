@@ -5,7 +5,7 @@
 ### Quick deployment
 
 ```
-    git clone https://github.com/t2ym/polymer-starter-kit-i18n.git
+    git clone -b with-resources https://github.com/t2ym/polymer-starter-kit-i18n.git
     cd polymer-starter-kit-i18n
     npm install -g polymer-cli # if missing
     npm install && bower install
