@@ -9,7 +9,7 @@
     cd polymer-starter-kit-i18n
     npm install -g polymer-cli # if missing
     npm install && bower install
-    # Add Locales (gulp 4 required)
+    # Add Locales (gulp 4 required) - unnecessary for with-resources branch
     ./node_modules/.bin/gulp locales --targets="de es fr ja zh-Hans"
     # Build (gulp 4 required)
     ./node_modules/.bin/gulp
