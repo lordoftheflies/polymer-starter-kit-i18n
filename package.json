@@ -2,6 +2,10 @@
   "name": "polymer-starter-kit-i18n",
   "version": "0.0.0",
   "description": "A starting point for Polymer 1.0 i18n apps",
+  "scripts": {
+    "test": "polymer test",
+    "build": "gulp"
+  },
   "repository": {
     "type": "git",
     "url": "git@github.com:t2ym/polymer-starter-kit-i18n"
